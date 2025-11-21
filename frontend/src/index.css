@@ -1,1 +1,21 @@
+:root {
+  --header-font: Arial, Helvetica, sans-serif;
+  --body-font: 'Courier New', Courier, monospace;
 
+  /* Accent colors: paars / roze */
+  --primary-color: #c86bff; /* paars/roze accent */
+  --secondary-color: #ff77b5; /* zachtere roze accent */
+
+  /* Dark theme backgrounds */
+  --background-color: #0b0f14; /* algemene achtergrond (zeer donker) */
+  --surface-color: #0f1419; /* oppervlak/kaarten */
+  --card-bg: rgba(255,255,255,0.03);
+
+  /* Text colors */
+  --text-color: #eaeef2; /* bijna wit voor hoofdtekst */
+  --muted-text: #b9c1cb; /* voor minder belangrijke tekst */
+
+  --background1: #0f1720;
+  --background2: #14131a;
+  --background3: #1a1423;
+}

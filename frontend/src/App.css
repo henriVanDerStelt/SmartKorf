@@ -1,0 +1,47 @@
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--body-font);
+  background-color: var(--background2);
+  color: var(--text-color);
+}
+
+h1 {  
+  font-family: var(--header-font);
+  color: var(--primary-color);
+}
+
+h2 {
+  font-family: var(--header-font);
+  color: var(--primary-color);
+}
+
+h3 {
+  font-family: var(--header-font);
+  color: var(--primary-color);
+}
+
+h4 {
+  font-family: var(--header-font);
+  color: var(--primary-color);
+}
+
+h5 {
+  font-family: var(--header-font);
+  color: var(--primary-color);
+}
+
+h6 {
+  font-family: var(--header-font);
+  color: var(--primary-color);
+}
+
+p {
+  font-family: var(--body-font);
+  color: var(--text-color);
+}
+
+a {
+  font-family: var(--body-font);
+  color: var(--secondary-color);
+}
