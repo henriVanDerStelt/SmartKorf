@@ -1,0 +1,27 @@
+.footer {
+    background: var(--surface-color);
+    color: var(--muted-text);
+    padding: 1rem 1.25rem;
+    text-align: center;
+    border-top: 1px solid rgba(255,255,255,0.03);
+    box-shadow: 0 -4px 18px rgba(0,0,0,0.45);
+    font-family: var(--body-font);
+    font-size: 0.95rem;
+}
+
+.footer p {
+    margin: 0;
+    color: var(--muted-text);
+}
+
+.footer a {
+    color: var(--primary-color);
+    text-decoration: none;
+    transition: color 140ms ease, opacity 120ms ease;
+}
+
+.footer a:hover,
+.footer a:focus {
+    color: var(--secondary-color);
+    opacity: 0.95;
+}
