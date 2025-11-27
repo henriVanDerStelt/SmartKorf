@@ -8,3 +8,5 @@ SmartKorf registreert automatisch wanneer er wordt gescoord en houdt zo de stand
 
 🎓 Onderwijscontext
 Ontwikkeld als onderdeel van een minor waarin slimme en interactieve producten worden ontworpen.
+
+test
