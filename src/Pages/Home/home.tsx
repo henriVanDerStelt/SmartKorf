@@ -10,7 +10,7 @@ function Home() {
 
       <div className="home-content">
         <h1>Welkom bij SmartKorf</h1>
-        <p>
+        <p className="smart-korf-text">
           Een moderne en slimme manier om je sportdata te koppelen en te
           visualiseren.
         </p>
