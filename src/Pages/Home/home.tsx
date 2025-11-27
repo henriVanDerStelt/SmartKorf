@@ -1,25 +1,30 @@
 import React from "react";
 import "./home.css";
+import { Link } from "react-router-dom";
 
 function Home() {
   return (
     <div className="home-container">
-      <h1>Welcome to SmartKorf</h1>
-      <p>
-        SmartKorf is your ultimate companion for korfball enthusiasts. Track
-        your performance, analyze game statistics, and connect with other
-        players in the community.
-      </p>
-      <h2>Features</h2>
-      <ul>
-        <li>Real-time performance tracking</li>
-        <li>Comprehensive game statistics</li>
-        <li>Interactive community features</li>
-      </ul>
-      <h2>Get Started</h2>
-      <p>
-        Sign up today to start improving your korfball skills with SmartKorf!
-      </p>
+      <div className="blob blob-1"></div>
+      <div className="blob blob-2"></div>
+
+      <div className="home-content">
+        <h1>Welkom bij SmartKorf</h1>
+        <p>
+          Een moderne en slimme manier om je sportdata te koppelen en te
+          visualiseren.
+        </p>
+
+        <div className="home-buttons">
+          <Link to="/connect" className="btn-outline">
+            Connect
+          </Link>
+
+          <Link to="/login" className="btn-filled">
+            Login
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

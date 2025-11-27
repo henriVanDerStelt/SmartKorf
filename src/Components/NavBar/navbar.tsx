@@ -1,5 +1,6 @@
 import React from "react";
 import "./navbar.css";
+import { Link } from "react-router-dom";
 
 function NavBar() {
   return (
@@ -7,10 +8,10 @@ function NavBar() {
       <h1>SmartKorf</h1>
       <ul className="navbar-links">
         <li>
-          <a href="/">Home</a>
+          <Link to="/">Home</Link>
         </li>
         <li>
-          <a href="/About">About</a>
+          <Link to="/About">About</Link>
         </li>
       </ul>
     </nav>
