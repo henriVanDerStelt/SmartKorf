@@ -1,0 +1,32 @@
+.score {
+    font-size: 17rem;
+}
+
+.button-container {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-sm);
+}
+
+.score-button {
+    margin-top: var(--space-md);
+    padding: 0.2rem 0.6rem;
+    font-size: 1rem;
+    border: none;
+    border-radius: 10px;
+    background: var(--color-accent);
+    color: #fff;
+    cursor: pointer;
+    font-family: var(--font-main);
+    font-weight: var(--font-weight-medium);
+}
+
+.team-name-input {
+    font-size: 1.2rem;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 8px;
+    text-align: center;
+    font-family: var(--font-main);
+    font-weight: var(--font-weight-medium);
+}   

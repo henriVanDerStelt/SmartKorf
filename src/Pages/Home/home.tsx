@@ -1,10 +1,11 @@
 import React, { useState } from "react";
 import "./home.css";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Popup from "../../Components/Popup/popup";
 
 function Home() {
   const [showPopup, setShowPopup] = useState(false);
+  const navigate = useNavigate();
   return (
     <div className="home-container">
       <div className="blob blob-1"></div>
@@ -35,7 +36,7 @@ function Home() {
                 {
                   label: "Connect",
                   variant: "primary",
-                  onClick: () => {},
+                  onClick: () => navigate("/scoreboard"),
                   closes: true,
                 },
               ]}
