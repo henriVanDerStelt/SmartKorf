@@ -13,13 +13,17 @@
     margin-top: -70px;
     margin-bottom: var(--space-lg);
     text-align: center;
-    width: 1030px;
+    width: 100%;
+    max-width: 1030px;
+    box-sizing: border-box;
 }
 
 .time {
     font-size: 4rem;
     font-weight: var(--font-weight-bold);
     color: var(--color-text);
+    /* responsive font */
+    font-size: clamp(1.5rem, 6vw, 4rem);
 }
 
 .timer-buttons {
@@ -38,4 +42,32 @@
     cursor: pointer;
     font-family: var(--font-main);
     font-weight: var(--font-weight-medium);
+}
+
+/* Adjust layout when viewport is narrow so timer stays visible under scores */
+@media (max-width: 1100px) {
+    .timer-container {
+        margin-top: -30px;
+        padding: var(--space-sm) var(--space-md);
+    }
+}
+
+@media (max-width: 700px) {
+    .timer-container {
+        margin-top: 12px;
+        margin-bottom: 220px;
+        padding: var(--space-sm);
+        width: 90%;
+    }
+
+    .timer-buttons {
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .timer-button {
+        padding: 0.35rem 0.8rem;
+        font-size: 0.95rem;
+    }
 }
