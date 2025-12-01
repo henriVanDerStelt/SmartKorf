@@ -46,6 +46,10 @@
   color: var(--color-text);
   text-decoration: none;
   font-weight: var(--font-weight-medium);
+  font-family: var(--font-main);
+  font-size: var(--font-size-p);
+  cursor: pointer;
+  background: transparent;
   transition: 0.3s ease;
 }
 
@@ -75,7 +79,7 @@
   border-radius: 50%;
   filter: blur(120px);
   animation: blobFloat 15s infinite ease-in-out;
-  opacity: 0.2;
+  opacity: 0.22;
 }
 
 /* Blob 1 - blauw */
@@ -95,7 +99,7 @@
   background: #ff7b00;
   bottom: -150px;
   right: -150px;
-  opacity: 0.15;
+  opacity: 0.19;
   animation-delay: 3s;
 }
 
@@ -113,10 +117,10 @@
     transform: scale(1) translate(0, 0);
   }
   33% {
-    transform: scale(1.15) translate(30px, -20px);
+    transform: scale(1.5) translate(30px, -20px);
   }
   66% {
-    transform: scale(0.95) translate(-20px, 30px);
+    transform: scale(0.8) translate(-20px, 30px);
   }
   100% {
     transform: scale(1) translate(0, 0);

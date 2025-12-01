@@ -1,0 +1,180 @@
+/* Overlay */
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(161, 161, 161, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem; /* keep modal away from viewport edges */
+  z-index: 200;
+  animation: popupFadeIn 0.2s ease-out;
+}
+
+/* Popup box (glassy) */
+.popup-content {
+  display: flex;
+  flex-direction: row;
+  width: 850px;
+  max-width: 90%;
+
+  /* Keep modal vertically centered by limiting height and enabling internal scroll */
+  max-height: 80vh;
+  overflow: auto;
+
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%); 
+
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+/* Left image column */
+.popup-left {
+  width: 45%;
+  height: 100%;
+  overflow: hidden;
+  position: relative; /* needed for overlay pseudo-element */
+}
+
+.popup-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* subtle translucent overlay to increase contrast with right content */
+.popup-left::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+
+/* Right content */
+.popup-right {
+  width: 55%;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Title */
+.popup-title {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-sm);
+  color: var(--color-text);
+}
+
+/* Message */
+.popup-message {
+  font-size: var(--font-size-p);
+  line-height: var(--lh-normal);
+  opacity: 0.85;
+  margin-bottom: var(--space-md);
+}
+
+/* Device list + larger select */
+.popup-device-list {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  margin-bottom: var(--space-md);
+}
+
+.popup-select {
+  min-width: 320px;
+  max-width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--color-text);
+  font-size: 1rem;
+  appearance: none;
+}
+
+@media (max-width: 560px) {
+  .popup-device-list {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .popup-select {
+    width: 100%;
+    min-width: auto;
+  }
+}
+
+/* Footer */
+.popup-footer {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.popup-footer-left,
+.popup-footer-right {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+/* Buttons */
+.popup-button {
+  padding: 0.6rem 1.4rem;
+  border-radius: 10px;
+  font-family: var(--font-main);
+  font-weight: var(--font-weight-medium);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: 0.25s ease;
+  border: none;
+}
+
+.popup-button--primary {
+  background: var(--color-accent);
+  color: #fff;
+}
+.popup-button--primary:hover { opacity: 0.85; }
+
+.popup-button--secondary {
+  background: #e5e5e5;
+  color: #111;
+}
+.popup-button--secondary:hover { background: #d8d8d8; }
+
+.popup-button--danger {
+  background: #ff3b30;
+  color: white;
+}
+.popup-button--danger:hover { background: #e53228; }
+
+.popup-button--outline {
+  background: transparent;
+  border: 2px solid var(--color-text);
+  color: var(--color-text);
+}
+.popup-button--outline:hover {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.popup-close-left { border-radius: 8px; }
+
+/* Animations */
+@keyframes popupFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes popupSlideUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
