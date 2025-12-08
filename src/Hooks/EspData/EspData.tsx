@@ -1,6 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
-// Voor TS: bluetooth en characteristic type fix
 declare global {
   interface Navigator {
     bluetooth: any;
@@ -11,51 +10,43 @@ export default function useEspData() {
   const [data, setData] = useState({ home: 0, away: 0 });
   const [isConnected, setIsConnected] = useState(false);
 
-  useEffect(() => {
-    const connectToESP32 = async () => {
-      try {
-        console.log("Requesting BLE device...");
-        const device = await (navigator as any).bluetooth.requestDevice({
-          filters: [{ namePrefix: "ESP32" }],
-          optionalServices: ["1234"],
-        });
+  const connectToESP32 = async () => {
+    try {
+      console.log("Requesting BLE device...");
+      const device = await (navigator as any).bluetooth.requestDevice({
+        filters: [{ namePrefix: "ESP32" }],
+        optionalServices: ["3bd083ef-9c40-4fd1-992f-d0450276a783"],
+      });
 
-        console.log(`Connected to device: ${device.name}`);
-        const server = await device.gatt.connect();
+      console.log(`Connected to device: ${device.name}`);
+      const server = await device.gatt.connect();
 
-        console.log("Getting primary service...");
-        const service = await server.getPrimaryService("1234");
+      const service = await server.getPrimaryService(
+        "3bd083ef-9c40-4fd1-992f-d0450276a783"
+      );
+      const characteristic = await service.getCharacteristic(
+        "a50704f1-ba55-44cf-96ec-2de6ded239d4"
+      );
 
-        console.log("Getting characteristic...");
-        const characteristic = await service.getCharacteristic("5678");
+      setIsConnected(true);
 
-        setIsConnected(true);
-
-        // Start notificaties
-        await characteristic.startNotifications();
-        characteristic.addEventListener(
-          "characteristicvaluechanged",
-          (event: Event) => {
-            try {
-              const value = new TextDecoder().decode(
-                (event.target as any).value
-              );
-              console.log("ESP32 data received:", value);
-              const parsedData = JSON.parse(value);
-              setData(parsedData);
-            } catch (parseErr) {
-              console.error("Error parsing ESP32 data:", parseErr);
-            }
+      await characteristic.startNotifications();
+      characteristic.addEventListener(
+        "characteristicvaluechanged",
+        (event: Event) => {
+          const value = new TextDecoder().decode((event.target as any).value);
+          try {
+            setData(JSON.parse(value));
+          } catch {
+            console.error("Invalid JSON from ESP32:", value);
           }
-        );
-      } catch (err) {
-        console.error("BLE Connection Error:", (err as Error).message);
-        setIsConnected(false);
-      }
-    };
+        }
+      );
+    } catch (err) {
+      console.error("BLE Connection Error:", (err as Error).message);
+      setIsConnected(false);
+    }
+  };
 
-    connectToESP32();
-  }, []);
-
-  return data;
+  return { data, isConnected, connectToESP32 };
 }
