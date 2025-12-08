@@ -2,8 +2,15 @@ import React from "react";
 import "./scorecounter.css";
 import { useState } from "react";
 
+import useArduinoData from "../../Hooks/ArduinoData/ArduinoData";
+
 function ScoreCounter() {
   const [score, setScore] = useState(0);
+  const arduinoData = useArduinoData();
+
+  React.useEffect(() => {
+    setScore(arduinoData.home + arduinoData.away);
+  }, [arduinoData]);
 
   const incrementScore = () => {
     setScore(score + 1);
