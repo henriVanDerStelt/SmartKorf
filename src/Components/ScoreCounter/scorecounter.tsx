@@ -2,22 +2,22 @@ import React from "react";
 import "./scorecounter.css";
 import { useState } from "react";
 
-import useArduinoData from "../../Hooks/ArduinoData/ArduinoData";
+import useEspData from "../../Hooks/EspData/EspData";
 
 function ScoreCounter() {
   const [score, setScore] = useState(0);
-  const arduinoData = useArduinoData();
+  const espData = useEspData();
 
   React.useEffect(() => {
-    setScore(arduinoData.home + arduinoData.away);
-  }, [arduinoData]);
+    setScore(espData.home);
+  }, [espData]);
 
   const incrementScore = () => {
     setScore(score + 1);
   };
 
   const decrementScore = () => {
-    setScore(score - 1);
+    setScore(score - 1 >= 0 ? score - 1 : 0);
   };
 
   return (
