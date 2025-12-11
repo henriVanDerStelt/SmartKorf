@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { createContext, useContext, useState, ReactNode } from "react";
 
 declare global {
   interface Navigator {
@@ -6,8 +6,21 @@ declare global {
   }
 }
 
-export default function useEspData() {
-  const [data, setData] = useState({ home: 0, away: 0 });
+interface EspData {
+  home: number;
+  away: number;
+}
+
+interface EspDataContextType {
+  data: EspData;
+  isConnected: boolean;
+  connectToESP32: () => Promise<void>;
+}
+
+const EspDataContext = createContext<EspDataContextType | undefined>(undefined);
+
+export const EspDataProvider = ({ children }: { children: ReactNode }) => {
+  const [data, setData] = useState<EspData>({ home: 0, away: 0 });
   const [isConnected, setIsConnected] = useState(false);
 
   const connectToESP32 = async () => {
@@ -37,9 +50,11 @@ export default function useEspData() {
           const value = new TextDecoder().decode((event.target as any).value);
           console.log("Bluetooth message received:", value);
           try {
-            setData(JSON.parse(value));
-          } catch {
-            console.error("Invalid JSON from ESP32:", value);
+            const parsedData = JSON.parse(value);
+            console.log("Parsed data:", parsedData);
+            setData(parsedData);
+          } catch (error) {
+            console.error("Invalid JSON from ESP32:", value, error);
           }
         }
       );
@@ -49,5 +64,17 @@ export default function useEspData() {
     }
   };
 
-  return { data, isConnected, connectToESP32 };
-}
+  return (
+    <EspDataContext.Provider value={{ data, isConnected, connectToESP32 }}>
+      {children}
+    </EspDataContext.Provider>
+  );
+};
+
+export const useEspData = () => {
+  const context = useContext(EspDataContext);
+  if (!context) {
+    throw new Error("useEspData must be used within EspDataProvider");
+  }
+  return context;
+};

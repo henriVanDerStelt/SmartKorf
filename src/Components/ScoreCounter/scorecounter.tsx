@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from "react";
 import "./scorecounter.css";
-import useEspData from "../../Hooks/EspData/EspData";
+// import useEspData from "../../Hooks/EspData/EspData";
 
-function ScoreCounter() {
-  const { data, isConnected, connectToESP32 } = useEspData();
+interface ScoreCounterProps {
+  data: number;
+  team: "home" | "away";
+}
+
+function ScoreCounter({ data, team }: ScoreCounterProps) {
+  // const { data, isConnected, connectToESP32 } = useEspData();
   const [score, setScore] = useState(0);
 
   useEffect(() => {
-    setScore(data.home);
+    setScore(data);
   }, [data]);
 
   const incrementScore = () => setScore(score + 1);
@@ -15,14 +20,6 @@ function ScoreCounter() {
 
   return (
     <div className="score-counter">
-      <button
-        onClick={connectToESP32}
-        disabled={isConnected}
-        style={{ marginBottom: 10 }}
-      >
-        {isConnected ? "Connected" : "Connect ESP32"}
-      </button>
-
       <h2 className="score">{score.toString().padStart(2, "0")}</h2>
       <div className="button-container">
         <button className="score-button decrement" onClick={decrementScore}>

@@ -9,18 +9,21 @@ import Footer from "./Components/Footer/footer";
 import Home from "./Pages/Home/home";
 import About from "./Pages/About/about";
 import ScoreBoard from "./Pages/ScoreBoard/scoreboard";
+import { EspDataProvider } from "./Contexts/EspDataContext";
 
 function App() {
   return (
-    <BrowserRouter basename={process.env.PUBLIC_URL}>
-      <NavBar />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/About" element={<About />} />
-        <Route path="/ScoreBoard" element={<ScoreBoard />} />
-      </Routes>
-      <Footer />
-    </BrowserRouter>
+    <EspDataProvider>
+      <BrowserRouter basename={process.env.PUBLIC_URL}>
+        <NavBar />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/About" element={<About />} />
+          <Route path="/ScoreBoard" element={<ScoreBoard />} />
+        </Routes>
+        <Footer />
+      </BrowserRouter>
+    </EspDataProvider>
   );
 }
 
