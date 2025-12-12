@@ -43,34 +43,45 @@ void sendScore() {
   // verder niks nodig; BLE callbacks en BluetoothSerial lopen op de achtergrond
 }
 
+String twoDigit(int value) {
+  if (value < 10) return "0" + String(value);
+  return String(value);
+}
+
 void renderScreen() {
-  // Clear the display each refresh
   static int lastHome = -1, lastAway = -1;
   if (homeScore == lastHome && awayScore == lastAway) return;
   lastHome = homeScore;
   lastAway = awayScore;
+
   dma_display->clearScreen();
+  dma_display->drawLine(0, 43, 128, 43, dma_display->color565(255, 0, 0));
 
   // ---------------- HOME ----------------
   dma_display->setTextColor(dma_display->color565(255, 0, 0));
 
   dma_display->setTextSize(1);
-  dma_display->setCursor(10, 5);
+  dma_display->setCursor(14, 4);
   dma_display->print("HOME");
 
   dma_display->setTextSize(4);
-  dma_display->setCursor(10, 25);
-  dma_display->print(homeScore);   // <-- always shows newest random value
+  dma_display->setCursor(4, 14);
+  dma_display->print(twoDigit(homeScore));   
 
-  // ---------------- GUEST ----------------
+  // ---------------- AWAY ----------------
   dma_display->setTextSize(1);
-  dma_display->setCursor(78, 5);
-  dma_display->print("GUEST");
+  dma_display->setCursor(90, 4);
+  dma_display->print("AWAY");
 
   dma_display->setTextSize(4);
-  dma_display->setCursor(78, 25);
-  dma_display->print(awayScore);   // <-- always shows newest random value
-  dma_display->flipDMABuffer();
+  dma_display->setCursor(80, 14);
+  dma_display->print(twoDigit(awayScore));   
+
+  // dma_display->flipDMABuffer();
+}
+
+void showTime(){
+  //put match time here x axis = 45
 }
 
 void drawPenis() {
