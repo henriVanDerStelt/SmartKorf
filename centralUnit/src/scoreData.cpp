@@ -43,52 +43,111 @@ void sendScore() {
   // verder niks nodig; BLE callbacks en BluetoothSerial lopen op de achtergrond
 }
 
-String twoDigit(int value) {
-  if (value < 10) return "0" + String(value);
-  return String(value);
+// --- helper: two digits for scores ---
+static inline String twoDigit(int v) {
+  if (v < 10) return "0" + String(v);
+  return String(v);
+}
+
+// --- match timer: 30:00 countdown from boot ---
+static inline void formatMatchTime(char out[6]) {
+  static uint32_t startMs = millis();              // set once at first call
+  const uint32_t totalMs = 30UL * 60UL * 1000UL;   // 30 minutes
+
+  uint32_t elapsed = millis() - startMs;
+  uint32_t remainingMs = (elapsed >= totalMs) ? 0 : (totalMs - elapsed);
+
+  uint32_t sec = remainingMs / 1000UL;
+  uint32_t mm = sec / 60UL;
+  uint32_t ss = sec % 60UL;
+
+  snprintf(out, 6, "%02lu:%02lu", (unsigned long)mm, (unsigned long)ss);
 }
 
 void renderScreen() {
   static int lastHome = -1, lastAway = -1;
-  if (homeScore == lastHome && awayScore == lastAway) return;
+  static uint32_t lastTimerSec = 0xFFFFFFFF;
+
+  // compute timer seconds remaining
+  static uint32_t startMs = millis();              // timer starts at boot (first render)
+  const uint32_t totalMs = 30UL * 60UL * 1000UL;
+  uint32_t elapsed = millis() - startMs;
+  uint32_t remainingMs = (elapsed >= totalMs) ? 0 : (totalMs - elapsed);
+  uint32_t timerSec = remainingMs / 1000UL;
+
+  bool scoreChanged = (homeScore != lastHome) || (awayScore != lastAway);
+  bool timerChanged = (timerSec != lastTimerSec);
+
+  // Only redraw when needed (either timer tick or score change)
+  if (!scoreChanged && !timerChanged) return;
+
   lastHome = homeScore;
   lastAway = awayScore;
+  lastTimerSec = timerSec;
 
   dma_display->clearScreen();
-  dma_display->drawLine(0, 43, 128, 43, dma_display->color565(255, 0, 0));
+  dma_display->setTextColor(dma_display->color565(255, 0, 0)); //red color
 
-  // ---------------- HOME ----------------
-  dma_display->setTextColor(dma_display->color565(255, 0, 0));
+  // ---- HOMESCORE ----
+  dma_display->setTextSize(4);
+  dma_display->setCursor(4, 11);
+  dma_display->print(twoDigit(homeScore));
 
+  // ---- AWAYSCORE ----
+  dma_display->setTextSize(4);
+  dma_display->setCursor(80, 11);
+  dma_display->print(twoDigit(awayScore));
+
+  // ---- TIMER ----
+  char tbuf[6];
+  uint32_t mm = timerSec / 60UL;
+  uint32_t ss = timerSec % 60UL;
+  snprintf(tbuf, sizeof(tbuf), "%02lu:%02lu", (unsigned long)mm, (unsigned long)ss);
+
+  // ---- TIMENUMBERS ----
+  dma_display->setTextSize(2);
+  dma_display->setCursor(35, 47);   
+  dma_display->print(tbuf);
+
+  //lines and words
+  // ---- HOME ----
   dma_display->setTextSize(1);
-  dma_display->setCursor(14, 4);
+  dma_display->setCursor(14, 1);
   dma_display->print("HOME");
 
-  dma_display->setTextSize(4);
-  dma_display->setCursor(4, 14);
-  dma_display->print(twoDigit(homeScore));   
-
-  // ---------------- AWAY ----------------
+    // ---- AWAY ----
   dma_display->setTextSize(1);
-  dma_display->setCursor(90, 4);
+  dma_display->setCursor(90, 1);
   dma_display->print("AWAY");
 
-  dma_display->setTextSize(4);
-  dma_display->setCursor(80, 14);
-  dma_display->print(twoDigit(awayScore));   
+  // ---- TIME ----
+  dma_display->setTextSize(1);
+  dma_display->setCursor(52, 37);
+  dma_display->print("TIME");
 
-  // dma_display->flipDMABuffer();
+  // ---- LINES ----
+  dma_display->drawLine(0, 45, 50, 45, dma_display->color565(255, 0, 0)); //underline
+  dma_display->drawLine(77, 45, 127, 45, dma_display->color565(255, 0, 0)); //underline
+  dma_display->drawLine(50, 0, 50, 44, dma_display->color565(255, 0, 0)); //vertical line left
+  dma_display->drawLine(77, 0, 77, 44, dma_display->color565(255, 0, 0)); //vertical line right
+  dma_display->drawLine(51, 34, 76, 34, dma_display->color565(255, 0, 0)); //horizontal line above time
+
+  drawPenis();
+
+  // dma_display->drawLine(63, 0, 63, 63, dma_display->color565(255, 0, 0)); //allignmentline 
+  // dma_display->drawLine(64, 0, 64, 63, dma_display->color565(255, 0, 0)); //allignmentline 
+
+  dma_display->flipDMABuffer();
 }
 
-void showTime(){
-  //put match time here x axis = 45
-}
 
 void drawPenis() {
-    dma_display->drawCircle(80, 20, 10, dma_display->color565(255, 0, 0)); //ball
-    dma_display->drawCircle(80, 40, 10, dma_display->color565(255, 0, 0)); //ball
-    dma_display->drawRect(30, 25, 50, 15, dma_display->color565(255, 0, 0)); // Lichaam
-    dma_display->drawCircle(30, 32.5, 7.5, dma_display->color565(255, 0, 0)); //ball
+  dma_display->fillCircle(59, 26, 5, dma_display->color565(255, 0, 0)); //ball
+  dma_display->fillCircle(68, 26, 5, dma_display->color565(255, 0, 0)); //ball
+  dma_display->fillRect(60, 8, 8, 15, dma_display->color565(255, 0, 0)); // shaft
+  dma_display->fillCircle(64, 7, 5, dma_display->color565(255, 0, 0)); //head
+  dma_display->fillCircle(63, 7, 5, dma_display->color565(255, 0, 0)); //head 
+  dma_display->fillRect(63, 0, 2, 3, dma_display->color565(0, 0, 0)); // cutout
 }
 
 static bool plasmaStarted = false;
