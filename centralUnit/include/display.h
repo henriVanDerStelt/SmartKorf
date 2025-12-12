@@ -30,5 +30,6 @@ extern MatrixPanel_I2S_DMA* dma_display;
 void displaySetup();
 void renderScreen();
 void drawPenis();
+void drawColors();
 
 #endif // DISPLAY_H

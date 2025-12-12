@@ -10,8 +10,8 @@ void setup(){
 }
 
 void loop(){
-  // sendScore();
-  // renderScreen();
-  drawPenis();
-  delay(50);
+  sendScore();
+  renderScreen();
+  // drawPenis();
+  // drawColors();
 }
