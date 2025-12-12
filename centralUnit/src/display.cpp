@@ -29,7 +29,7 @@ void displaySetup() {
   mxconfig.gpio.clk = CLK_PIN;
   mxconfig.gpio.lat = LAT_PIN;
   mxconfig.gpio.oe  = OE_PIN;
-  mxconfig.setPixelColorDepthBits(6); // 6 bits per color channel so 18 bits, lower if memory issues occur
+  mxconfig.setPixelColorDepthBits(2); // 6 bits per color channel so 18 bits, lower if memory issues occur
 
   /* 
   ALS JE DEZE SETTINGS HIERONDER AANPAST KRIJG JE SCREENTEARING/RUIS!
@@ -38,7 +38,7 @@ void displaySetup() {
   mxconfig.latch_blanking = 1; // the time between clocking data to the panel and then turning the LEDS 'on', 1 is default
   mxconfig.i2sspeed       = HUB75_I2S_CFG::HZ_15M; // (HZ_15M works best atm)
   mxconfig.clkphase       = true;      // or false depending on panel; default is true in newer versions
-  mxconfig.double_buff = false;   // can be used for syncing to avoid visual artefacts, but uses more RAM. use with flipdmabuffer()
+  mxconfig.double_buff = true;   // can be used for syncing to avoid visual artefacts, but uses more RAM. use with flipdmabuffer(). Also breaks site, no ram?
   mxconfig.min_refresh_rate = 120; // set to 120Hz minimum refresh rate (120 works best atm)
 
   Serial.println("Creating MatrixPanel_I2S_DMA...");
@@ -54,7 +54,7 @@ void displaySetup() {
   }
   Serial.println("After begin().");
 
-  dma_display->setBrightness8(128);
+  dma_display->setBrightness8(255);
   dma_display->clearScreen();
 //   dma_display->drawPixel(0, 0, dma_display->color565(255, 255, 255));
 //   dma_display->setCursor(2, 10);
