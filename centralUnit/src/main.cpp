@@ -1,12 +1,17 @@
 #include <Arduino.h>
 #include <website.h>
+#include <display.h>
 
 void setup(){
   Serial.begin(115200);
   delay(1000);
   websiteSetup();
+  displaySetup();
 }
 
 void loop(){
-  sendScore();
+  // sendScore();
+  // renderScreen();
+  drawPenis();
+  delay(50);
 }

@@ -22,7 +22,7 @@ int awayScore = 0;
 // ---- Callback voor BLE UART writes (van je BLE-sender ESP) ----
 class RXCallback : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* pCharacteristic) override {
-    std::string msg = pCharacteristic->getValue();
+    String msg = pCharacteristic->getValue();
     if (msg.length() == 0) return;
 
     Serial.print("BLE UART received: ");
@@ -94,30 +94,4 @@ void websiteSetup() {
   Serial.println("BLE Server ready, advertising started.");
 }
 
-void sendScore() {
-  // Demo: elke 5 seconden random scores aanpassen en naar ScoreBoard characteristic sturen.
-  static unsigned long lastUpdate = 0;
-  unsigned long now = millis();
 
-  if (now - lastUpdate >= 5000) {
-    lastUpdate = now;
-
-    // willekeurige increment tussen 0-1
-    homeScore += random(0, 2);
-    awayScore += random(0, 2);
-
-    // JSON payload voor je PWA:
-    // {"home":3,"away":5}
-    String jsonData = "{\"home\":" + String(homeScore) + ",\"away\":" + String(awayScore) + "}";
-
-    if (pScoreChar != nullptr) {
-      pScoreChar->setValue(jsonData.c_str());
-      pScoreChar->notify();  // stuurt data naar de Web Bluetooth client
-    }
-
-    Serial.print("ScoreBoard data sent: ");
-    Serial.println(jsonData);
-  }
-
-  // verder niks nodig; BLE callbacks en BluetoothSerial lopen op de achtergrond
-}
