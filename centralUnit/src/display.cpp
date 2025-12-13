@@ -3,14 +3,14 @@
 
 MatrixPanel_I2S_DMA *dma_display = nullptr;
 
-void displaySetup() {
-  Serial.println("Starting HUB75 on LIVE Mini Kit ESP32...");
+HUB75_I2S_CFG mxconfig(
+  PANEL_WIDTH,
+  PANEL_HEIGHT,
+  PANELS_NUMBER
+);
 
-  HUB75_I2S_CFG mxconfig(
-    PANEL_WIDTH,
-    PANEL_HEIGHT,
-    PANELS_NUMBER
-  );
+void displayInit() {
+  Serial.println("Starting LED matrix display...");
 
   // Pin mapping
   mxconfig.gpio.r1 = R1_PIN;
@@ -29,38 +29,47 @@ void displaySetup() {
   mxconfig.gpio.clk = CLK_PIN;
   mxconfig.gpio.lat = LAT_PIN;
   mxconfig.gpio.oe  = OE_PIN;
-  mxconfig.setPixelColorDepthBits(2); // 6 bits per color channel so 18 bits, lower if memory issues occur
 
-  /* 
-  ALS JE DEZE SETTINGS HIERONDER AANPAST KRIJG JE SCREENTEARING/RUIS!
-  DUS: ADMIN SETTINGS, NIET AANPASSEN TENZIJ JE WEET WAT JE DOET!
-  */
-  mxconfig.latch_blanking = 1; // the time between clocking data to the panel and then turning the LEDS 'on', 1 is default
-  mxconfig.i2sspeed       = HUB75_I2S_CFG::HZ_15M; // (HZ_15M works best atm)
-  mxconfig.clkphase       = true;      // or false depending on panel; default is true in newer versions
-  mxconfig.double_buff = true;   // can be used for syncing to avoid visual artefacts, but uses more RAM. use with flipdmabuffer(). Also breaks site, no ram?
-  mxconfig.min_refresh_rate = 120; // set to 120Hz minimum refresh rate (120 works best atm)
+  // change depending on usecase
+  // scoreBoardSettings();
+  funSettings();
 
-  Serial.println("Creating MatrixPanel_I2S_DMA...");
   dma_display = new MatrixPanel_I2S_DMA(mxconfig);
-  Serial.println("After constructor.");
 
-  Serial.println("Calling begin()...");
   if (!dma_display->begin()) {
     Serial.println("****** I2S/DMA init FAILED (memory or pin issue) ********");
     while (true) {
       delay(1000);
     }
   }
-  Serial.println("After begin().");
+  Serial.println("Successfully started matrix display.");
 
   dma_display->setBrightness8(255);
   dma_display->clearScreen();
-//   dma_display->drawPixel(0, 0, dma_display->color565(255, 255, 255));
-//   dma_display->setCursor(2, 10);
-//   dma_display->setTextSize(4);
-//   dma_display->setTextColor(dma_display->color565(0, 255, 0));
-//   dma_display->fillScreen(dma_display->color565(255, 255, 255));
-//   dma_display->print("Remco");
-//   dma_display->flipDMABuffer();
+}
+
+void scoreBoardSettings(){
+    /* 
+  ALS JE DEZE SETTINGS HIERONDER AANPAST KRIJG JE SCREENTEARING/RUIS!
+  DUS: ADMIN SETTINGS, NIET AANPASSEN TENZIJ JE WEET WAT JE DOET!
+  */
+  mxconfig.setPixelColorDepthBits(2); // 6 bits per color channel so 18 bits, lower if memory issues occur
+  mxconfig.latch_blanking = 1; // the time between clocking data to the panel and then turning the LEDS 'on', 1 is default
+  mxconfig.i2sspeed       = HUB75_I2S_CFG::HZ_15M; // (HZ_15M works best atm)
+  mxconfig.clkphase       = true;      // or false depending on panel; default is true in newer versions
+  mxconfig.double_buff = true;   // can be used for syncing to avoid visual artefacts, but uses more RAM. use with flipdmabuffer(). Also breaks site, no ram?
+  mxconfig.min_refresh_rate = 120; // set to 120Hz minimum refresh rate (120 works best atm)
+
+}
+
+void funSettings(){
+  /*
+  MET DEZE SETTINGS KAN DE ESP32 ALLEEN HET DISPLAY AAN, GEEN MEMORY OVER VOOR ANDERE DINGEN!
+  */
+  mxconfig.setPixelColorDepthBits(8); 
+  mxconfig.latch_blanking = 1; 
+  mxconfig.i2sspeed       = HUB75_I2S_CFG::HZ_15M; 
+  mxconfig.clkphase       = true;     
+  mxconfig.double_buff = true;   
+  mxconfig.min_refresh_rate = 120; 
 }

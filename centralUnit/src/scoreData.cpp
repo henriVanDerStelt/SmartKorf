@@ -140,7 +140,6 @@ void renderScreen() {
   dma_display->flipDMABuffer();
 }
 
-
 void drawPenis() {
   dma_display->fillCircle(59, 26, 5, dma_display->color565(255, 0, 0)); //ball
   dma_display->fillCircle(68, 26, 5, dma_display->color565(255, 0, 0)); //ball
