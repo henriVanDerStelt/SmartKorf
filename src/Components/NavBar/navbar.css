@@ -49,3 +49,28 @@
   color: var(--color-accent);
   border-bottom: 2px solid var(--color-accent);
 }
+
+/* Sign-in button */
+.navbar-signin {
+  padding: 0.3rem 0.6rem;
+  border-radius: 10px;
+  border: 2px solid var(--color-accent);
+  font-family: var(--font-main);
+  font-weight: var(--font-weight-medium);
+  font-size: 0.8rem;
+  color: var(--color-accent);
+  background: transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.navbar-signin:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 113, 227, 0.32);
+  opacity: 0.95;
+}
+
+.navbar-signin:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 12px rgba(0, 113, 227, 0.22);
+}
