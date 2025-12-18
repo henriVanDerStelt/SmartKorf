@@ -31,8 +31,8 @@ void displayInit() {
   mxconfig.gpio.oe  = OE_PIN;
 
   // change depending on usecase
-  // scoreBoardSettings();
-  funSettings();
+  scoreBoardSettings();
+  // funSettings();
 
   dma_display = new MatrixPanel_I2S_DMA(mxconfig);
 
@@ -44,7 +44,7 @@ void displayInit() {
   }
   Serial.println("Successfully started matrix display.");
 
-  dma_display->setBrightness8(255);
+  dma_display->setBrightness8(128);
   dma_display->clearScreen();
 }
 
@@ -53,7 +53,7 @@ void scoreBoardSettings(){
   ALS JE DEZE SETTINGS HIERONDER AANPAST KRIJG JE SCREENTEARING/RUIS!
   DUS: ADMIN SETTINGS, NIET AANPASSEN TENZIJ JE WEET WAT JE DOET!
   */
-  mxconfig.setPixelColorDepthBits(2); // 6 bits per color channel so 18 bits, lower if memory issues occur
+  mxconfig.setPixelColorDepthBits(4); // 6 bits per color channel so 18 bits, lower if memory issues occur
   mxconfig.latch_blanking = 1; // the time between clocking data to the panel and then turning the LEDS 'on', 1 is default
   mxconfig.i2sspeed       = HUB75_I2S_CFG::HZ_15M; // (HZ_15M works best atm)
   mxconfig.clkphase       = true;      // or false depending on panel; default is true in newer versions
@@ -71,5 +71,5 @@ void funSettings(){
   mxconfig.i2sspeed       = HUB75_I2S_CFG::HZ_15M; 
   mxconfig.clkphase       = true;     
   mxconfig.double_buff = true;   
-  mxconfig.min_refresh_rate = 120; 
+  mxconfig.min_refresh_rate = 60; 
 }

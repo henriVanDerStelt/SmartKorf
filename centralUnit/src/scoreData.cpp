@@ -49,21 +49,6 @@ static inline String twoDigit(int v) {
   return String(v);
 }
 
-// --- match timer: 30:00 countdown from boot ---
-static inline void formatMatchTime(char out[6]) {
-  static uint32_t startMs = millis();              // set once at first call
-  const uint32_t totalMs = 30UL * 60UL * 1000UL;   // 30 minutes
-
-  uint32_t elapsed = millis() - startMs;
-  uint32_t remainingMs = (elapsed >= totalMs) ? 0 : (totalMs - elapsed);
-
-  uint32_t sec = remainingMs / 1000UL;
-  uint32_t mm = sec / 60UL;
-  uint32_t ss = sec % 60UL;
-
-  snprintf(out, 6, "%02lu:%02lu", (unsigned long)mm, (unsigned long)ss);
-}
-
 void renderScreen() {
   static int lastHome = -1, lastAway = -1;
   static uint32_t lastTimerSec = 0xFFFFFFFF;
@@ -132,12 +117,70 @@ void renderScreen() {
   dma_display->drawLine(77, 0, 77, 44, dma_display->color565(255, 0, 0)); //vertical line right
   dma_display->drawLine(51, 34, 76, 34, dma_display->color565(255, 0, 0)); //horizontal line above time
 
-  drawPenis();
+  drawLogo();
+  // drawPenis();
 
   // dma_display->drawLine(63, 0, 63, 63, dma_display->color565(255, 0, 0)); //allignmentline 
   // dma_display->drawLine(64, 0, 64, 63, dma_display->color565(255, 0, 0)); //allignmentline 
 
   dma_display->flipDMABuffer();
+}
+
+void drawLogo() {
+  // Box bounds (inside your red lines)
+  const int x0 = 51, x1 = 76;
+  const int y0 = 0,  y1 = 33;
+
+  // Colors
+  uint16_t white  = dma_display->color565(255, 255, 255);
+  uint16_t orange = dma_display->color565(255, 165, 0);   // ball
+  uint16_t brown  = dma_display->color565(210, 170, 90);  // basket-ish
+
+  // --- Basket (rim + net) ---
+  // Rim (simple "oval" look via lines)
+  int cx = 63;     // center x of logo
+  int rimY = 19;   // rim height
+  int rimL = 56;   // rim left
+  int rimR = 70;   // rim right
+
+  dma_display->drawLine(rimL, rimY, rimR, rimY, brown);          // top rim
+  dma_display->drawLine(rimL+1, rimY+1, rimR-1, rimY+1, brown);  // rim thickness
+  dma_display->drawLine(rimL, rimY, rimL+2, rimY-2, brown);      // left curve hint
+  dma_display->drawLine(rimR-2, rimY-2, rimR, rimY, brown);      // right curve hint
+
+  // Net (tapered down)
+  int netTopL = rimL+2, netTopR = rimR-2;
+  int netBotL = 59,     netBotR = 67;
+  int netBotY = 30;
+
+  dma_display->drawLine(netTopL, rimY+2, netBotL, netBotY, brown);
+  dma_display->drawLine(netTopR, rimY+2, netBotR, netBotY, brown);
+  dma_display->drawLine(netBotL, netBotY, netBotR, netBotY, brown);
+
+  // Net “weave”
+  dma_display->drawLine(netTopL+2, rimY+5, netBotL+1, netBotY-2, brown);
+  dma_display->drawLine(netTopR-2, rimY+5, netBotR-1, netBotY-2, brown);
+  dma_display->drawLine(netTopL+5, rimY+6, netTopR-5, rimY+6, brown);
+  dma_display->drawLine(netTopL+3, rimY+10, netTopR-3, rimY+10, brown);
+  dma_display->drawLine(netTopL+2, rimY+14, netTopR-2, rimY+14, brown);
+
+  // --- Ball (entering + going through rim) ---
+  // Put the ball slightly above rim and overlapping into net
+  int ballX = 58;
+  int ballY = 12;
+  int r = 4;
+
+  dma_display->fillCircle(ballX, ballY, r, orange);
+  dma_display->drawCircle(ballX, ballY, r, white); // outline
+
+  // Ball seams (simple)
+  dma_display->drawLine(ballX - r + 1, ballY, ballX + r - 1, ballY, white);
+  dma_display->drawLine(ballX, ballY - r + 1, ballX, ballY + r - 1, white);
+  dma_display->drawLine(ballX - 2, ballY - 3, ballX + 2, ballY + 3, white);
+
+  // --- Optional: tiny motion cue (makes it read as "going through") ---
+  dma_display->drawLine(ballX - 8, ballY - 6, ballX - 5, ballY - 3, white);
+  dma_display->drawLine(ballX - 7, ballY - 3, ballX - 4, ballY, white);
 }
 
 void drawPenis() {

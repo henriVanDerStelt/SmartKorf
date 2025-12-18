@@ -6,17 +6,16 @@
 void setup(){
   Serial.begin(115200);
   delay(1000);
-  // websiteSetup();
+  websiteSetup();
   displayInit();
-  pngInit();
-  listFiles();
+  // pngInit();
+  // listFiles();
 }
 
 void loop(){
-  // sendScore();
-  // renderScreen();
-  // showTime();
-  drawPNG("/monkey.png", 0, 0);
-  dma_display->flipDMABuffer();
+  sendScore();
+  renderScreen();
+  // drawPNG("/monkey.png", 0, 0);
+  // dma_display->flipDMABuffer();
   // drawColors();
 }

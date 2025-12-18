@@ -33,6 +33,8 @@ void scoreBoardSettings();
 void funSettings();
 void showTime();
 
+
+void drawLogo();
 void drawPenis();
 void drawColors();
 
