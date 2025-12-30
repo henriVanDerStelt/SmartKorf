@@ -22,7 +22,7 @@ int awayScore = 0;
 // ---- Callback voor BLE UART writes (van je BLE-sender ESP) ----
 class RXCallback : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* pCharacteristic) override {
-    std::string value = pCharacteristic->getValue();
+    String value = pCharacteristic->getValue();
     String msg = String(value.c_str());
 
     if (msg.length() == 0) return;

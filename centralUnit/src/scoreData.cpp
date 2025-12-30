@@ -127,60 +127,117 @@ void renderScreen() {
 }
 
 void drawLogo() {
-  // Box bounds (inside your red lines)
-  const int x0 = 51, x1 = 76;
-  const int y0 = 0,  y1 = 33;
-
   // Colors
-  uint16_t white  = dma_display->color565(255, 255, 255);
-  uint16_t orange = dma_display->color565(255, 165, 0);   // ball
-  uint16_t brown  = dma_display->color565(210, 170, 90);  // basket-ish
+  // uint16_t black  = dma_display->color565(255, 255, 255);
+  uint16_t blue = dma_display->color565(0, 0, 255);   // ball
+  uint16_t yellow  = dma_display->color565(255, 255, 0);  // yellow
+  uint16_t white = dma_display->color565(0, 0, 0);     // outline
+  uint16_t black   = dma_display->color565(128, 128, 128);   // grey
 
-  // --- Basket (rim + net) ---
-  // Rim (simple "oval" look via lines)
-  int cx = 63;     // center x of logo
-  int rimY = 19;   // rim height
-  int rimL = 56;   // rim left
-  int rimR = 70;   // rim right
+  //basket
+  dma_display->fillRect(51, 0, 26, 34, white); // white background
+  dma_display->drawRect(52, 2, 18, 10, black); // outline
+  dma_display->fillRect(53, 3, 16, 8, yellow); // basket infill
+  dma_display->drawLine(53, 4, 65, 4, black); // horizontal line
+  dma_display->drawLine(53, 6, 65, 6, black); // horizontal line
+  dma_display->drawLine(53, 8, 65, 8, black); // horizontal line
 
-  dma_display->drawLine(rimL, rimY, rimR, rimY, brown);          // top rim
-  dma_display->drawLine(rimL+1, rimY+1, rimR-1, rimY+1, brown);  // rim thickness
-  dma_display->drawLine(rimL, rimY, rimL+2, rimY-2, brown);      // left curve hint
-  dma_display->drawLine(rimR-2, rimY-2, rimR, rimY, brown);      // right curve hint
+  //pole
+  dma_display->drawRect(71, 10, 4, 24, black);   // outline
+  dma_display->fillRect(72, 11, 2, 23, white);   // blue rectangle
 
-  // Net (tapered down)
-  int netTopL = rimL+2, netTopR = rimR-2;
-  int netBotL = 59,     netBotR = 67;
-  int netBotY = 30;
+  //corner
+  dma_display->drawRect(69, 4, 6, 6, black);   // outline
+  dma_display->fillRect(70, 5, 2, 4, yellow);   // yellow rectangle
+  dma_display->fillRect(72, 5, 2, 5, yellow);   // yellow rectangle
 
-  dma_display->drawLine(netTopL, rimY+2, netBotL, netBotY, brown);
-  dma_display->drawLine(netTopR, rimY+2, netBotR, netBotY, brown);
-  dma_display->drawLine(netBotL, netBotY, netBotR, netBotY, brown);
+  //speedlines
+  dma_display->drawLine(56, 13, 56, 16, black); // line1
+  dma_display->drawLine(60, 13, 60, 15, black); // line2
+  dma_display->drawLine(64, 13, 64, 16, black); // line3
 
-  // Net “weave”
-  dma_display->drawLine(netTopL+2, rimY+5, netBotL+1, netBotY-2, brown);
-  dma_display->drawLine(netTopR-2, rimY+5, netBotR-1, netBotY-2, brown);
-  dma_display->drawLine(netTopL+5, rimY+6, netTopR-5, rimY+6, brown);
-  dma_display->drawLine(netTopL+3, rimY+10, netTopR-3, rimY+10, brown);
-  dma_display->drawLine(netTopL+2, rimY+14, netTopR-2, rimY+14, brown);
+  //ball
+  dma_display->drawCircle(60, 25, 7.5, black); // outline
+  dma_display->fillCircle(60, 25, 6.5, blue); // blue infill
+  
+  //ball tints
+  dma_display->drawPixel(56, 20, yellow); 
+  dma_display->drawPixel(57, 20, yellow); 
+  dma_display->drawPixel(55, 21, yellow); 
+  dma_display->drawPixel(55, 22, yellow); 
+  dma_display->drawPixel(56, 21, yellow);  
 
-  // --- Ball (entering + going through rim) ---
-  // Put the ball slightly above rim and overlapping into net
-  int ballX = 58;
-  int ballY = 12;
-  int r = 4;
+  dma_display->drawPixel(63, 20, yellow); 
+  dma_display->drawPixel(64, 20, yellow); 
+  dma_display->drawPixel(64, 21, yellow); 
+  dma_display->drawPixel(65, 21, yellow); 
+  dma_display->drawPixel(65, 22, yellow); 
 
-  dma_display->fillCircle(ballX, ballY, r, orange);
-  dma_display->drawCircle(ballX, ballY, r, white); // outline
+  dma_display->drawPixel(57, 22, yellow); 
+  dma_display->drawPixel(58, 22, yellow); 
+  dma_display->drawPixel(59, 22, yellow); 
+  dma_display->drawPixel(58, 21, yellow); 
+  dma_display->drawPixel(59, 21, yellow); 
+  dma_display->drawPixel(57, 23, yellow); 
+  dma_display->drawPixel(58, 23, yellow); 
 
-  // Ball seams (simple)
-  dma_display->drawLine(ballX - r + 1, ballY, ballX + r - 1, ballY, white);
-  dma_display->drawLine(ballX, ballY - r + 1, ballX, ballY + r - 1, white);
-  dma_display->drawLine(ballX - 2, ballY - 3, ballX + 2, ballY + 3, white);
+  dma_display->drawPixel(55, 24, yellow); 
+  dma_display->drawPixel(56, 24, yellow); 
+  dma_display->drawPixel(55, 25, yellow); 
+  dma_display->drawPixel(56, 25, yellow); 
+  dma_display->drawPixel(57, 25, yellow); 
+  dma_display->drawPixel(56, 26, yellow); 
+  dma_display->drawPixel(57, 26, yellow); 
 
-  // --- Optional: tiny motion cue (makes it read as "going through") ---
-  dma_display->drawLine(ballX - 8, ballY - 6, ballX - 5, ballY - 3, white);
-  dma_display->drawLine(ballX - 7, ballY - 3, ballX - 4, ballY, white);
+  dma_display->drawPixel(61, 21, yellow);
+  dma_display->drawPixel(62, 21, yellow);
+  dma_display->drawPixel(61, 22, yellow);
+  dma_display->drawPixel(62, 22, yellow);
+  dma_display->drawPixel(63, 22, yellow);
+  dma_display->drawPixel(62, 23, yellow);
+  dma_display->drawPixel(63, 23, yellow);
+
+  dma_display->drawPixel(64, 24, yellow);
+  dma_display->drawPixel(65, 24, yellow);
+  dma_display->drawPixel(63, 25, yellow);
+  dma_display->drawPixel(64, 25, yellow);
+  dma_display->drawPixel(65, 25, yellow);
+  dma_display->drawPixel(63, 26, yellow);
+  dma_display->drawPixel(64, 26, yellow);
+
+  dma_display->drawPixel(60, 26, yellow);
+  dma_display->drawPixel(60, 27, yellow);
+  dma_display->drawPixel(60, 28, yellow);
+  dma_display->drawPixel(60, 29, yellow);
+  dma_display->drawPixel(59, 27, yellow);
+  dma_display->drawPixel(59, 28, yellow);
+  dma_display->drawPixel(59, 29, yellow);
+  dma_display->drawPixel(61, 27, yellow);
+  dma_display->drawPixel(61, 28, yellow);
+  dma_display->drawPixel(61, 29, yellow);
+  dma_display->drawPixel(58, 28, yellow);
+  dma_display->drawPixel(62, 28, yellow);
+
+  dma_display->drawPixel(54, 26, yellow);
+  dma_display->drawPixel(54, 27, yellow);
+  dma_display->drawPixel(55, 27, yellow);
+  dma_display->drawPixel(55, 28, yellow);
+  dma_display->drawPixel(55, 29, yellow);
+  dma_display->drawPixel(56, 30, yellow);
+
+  dma_display->drawPixel(66, 26, yellow);
+  dma_display->drawPixel(66, 27, yellow);
+  dma_display->drawPixel(65, 27, yellow);
+  dma_display->drawPixel(65, 28, yellow);
+  dma_display->drawPixel(65, 29, yellow);
+  dma_display->drawPixel(64, 30, yellow);
+
+  dma_display->drawPixel(58, 31, yellow);
+  dma_display->drawPixel(59, 31, yellow);
+  dma_display->drawPixel(60, 31, yellow);
+  dma_display->drawPixel(61, 31, yellow);
+  dma_display->drawPixel(62, 31, yellow);
+
 }
 
 void drawPenis() {
