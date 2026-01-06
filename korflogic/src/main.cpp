@@ -12,17 +12,17 @@ unsigned long lastUpdateTime = 0;
 unsigned long lastActivityTime = 0;
 
 void setup() {
-    Serial. begin(115200);
+    Serial.begin(115200);
     delay(1000);
     
     Serial.println("\n\n=================================");
     Serial.println("Korfbal Detection System v1.0");
-    Serial. println("ESP32-C3 XIAO");
+    Serial.println("ESP32-C3 XIAO");
     Serial.println("=================================\n");
     
     // Initialiseer sensor systeem
     if (!sensorManager.begin()) {
-        Serial. println("❌ System initialization failed!");
+        Serial.println("❌ System initialization failed!");
         Serial.println("Please check sensor connections and restart.");
         while (1) {
             delay(1000);
@@ -45,7 +45,7 @@ void loop() {
         sensorManager.update();
         
         // Check voor events
-        if (sensorManager. isGoalScored()) {
+        if (sensorManager.isGoalScored()) {
             Serial.println("\n🎉🎉🎉 DOELPUNT!  🎉🎉🎉\n");
             lastActivityTime = currentTime;
             
@@ -54,7 +54,7 @@ void loop() {
             sensorManager.resetDetections();
         }
         
-        if (sensorManager. isShotAttempt()) {
+        if (sensorManager.isShotAttempt()) {
             Serial.println("📊 Shot attempt registered");
             lastActivityTime = currentTime;
             
@@ -64,7 +64,7 @@ void loop() {
             sensorManager.resetDetections();
         }
         
-        if (sensorManager. isPlayerCollision()) {
+        if (sensorManager.isPlayerCollision()) {
             Serial.println("⚠️  Possible foul - player collision detected");
             lastActivityTime = currentTime;
             

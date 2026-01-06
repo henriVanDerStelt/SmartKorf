@@ -8,12 +8,12 @@
 #include <Wire.h>
 
 // Pin definities voor XIAO ESP32-C3
-#define VIBRATION_PIN_DIGITAL D0  // DO pin van SW-18010P
-#define VIBRATION_PIN_ANALOG D1   // AO pin van SW-18010P (was TOF_XSHUT_TOP)
-#define TOF_XSHUT_TOP D2          // Verplaatst naar D2
-#define TOF_XSHUT_BOT D3          // Verplaatst naar D3
-#define SDA_PIN D4
-#define SCL_PIN D5
+#define VIBRATION_PIN_DIGITAL 2  // DO pin van SW-18010P
+#define VIBRATION_PIN_ANALOG 3   // AO pin van SW-18010P (was TOF_XSHUT_TOP)
+#define TOF_XSHUT_TOP 4         // Verplaatst naar D2
+#define TOF_XSHUT_BOT 5          // Verplaatst naar D3
+#define SDA_PIN 6                  // GPIO6 (D4)        
+#define SCL_PIN 7                  // GPIO7 (D5)
 
 // TOF I2C adressen (VL53L1X standaard 0x29)
 #define TOF_TOP_ADDRESS 0x29
