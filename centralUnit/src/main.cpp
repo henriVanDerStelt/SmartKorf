@@ -6,13 +6,14 @@
 void setup(){
   Serial.begin(115200);
   delay(1000);
-  websiteSetup();
   displayInit();
+  bleInit();
   // pngInit();
   // listFiles();
 }
 
 void loop(){
+  handleBluetooth();
   sendScore();
   renderScreen();
   // drawPNG("/monkey.png", 0, 0);

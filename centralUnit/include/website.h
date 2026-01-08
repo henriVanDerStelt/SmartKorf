@@ -4,13 +4,18 @@
 #include <BLECharacteristic.h>
 #include <BluetoothSerial.h>   // <-- REQUIRED so extern BluetoothSerial works
 
-// ---- UUIDs voor UART-bridge (BLE sender -> BT classic) ----
-#define SERVICE_UUID_UART        "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
-#define CHARACTERISTIC_UUID_UART "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
+// BLE Configuration
+#define DEVICE_NAME "ESP32-BLE-Gateway"
 
-// ---- UUIDs voor ScoreBoard (PWA / Web Bluetooth) ----
-#define SERVICE_UUID_SCORE       "3bd083ef-9c40-4fd1-992f-d0450276a783"
-#define CHARACTERISTIC_UUID_SCORE "a50704f1-ba55-44cf-96ec-2de6ded239d4"
+// Service UUIDs
+#define SENDER_SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b" // From senders
+#define SENDER_CHAR_UUID_TX "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+
+// Service for PWA connection
+#define GATEWAY_SERVICE_UUID "12345678-1234-1234-1234-123456789abc"
+#define GATEWAY_CHAR_DATA_UUID "22345678-1234-1234-1234-123456789abc"
+#define GATEWAY_CHAR_STATUS_UUID "32345678-1234-1234-1234-123456789abc"
+#define GATEWAY_CHAR_COMMAND_UUID "42345678-1234-1234-1234-123456789abc"
 
 extern int homeScore;
 extern int awayScore;
@@ -20,5 +25,12 @@ extern BLECharacteristic* pScoreChar;
 
 void websiteSetup();
 void sendScore();
+void bleInit();
+void handleBluetooth();
+
+void timerReset();        // reset to 30:00
+void timerPause(bool);    // pause
+void timerTogglePause();  // toggle pause/resume
+
 
 #endif // WEBSITE_H

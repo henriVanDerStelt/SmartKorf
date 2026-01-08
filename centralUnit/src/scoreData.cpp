@@ -15,32 +15,99 @@ CRGB ColorFromCurrentPalette(uint8_t index = 0, uint8_t brightness = 255, TBlend
   return ColorFromPalette(currentPalette, index, brightness, blendType);
 }
 
+// define globals exactly once:
+int homeScore = 0;
+int awayScore = 0;
+
+BluetoothSerial SerialBT;      // only if you use BT classic
+BLECharacteristic* pScoreChar = nullptr;
+
 void sendScore() {
-  // Demo: elke 5 seconden random scores aanpassen en naar ScoreBoard characteristic sturen.
-  static unsigned long lastUpdate = 0;
-  unsigned long now = millis();
+  static uint32_t lastUpdate = 0;
+  uint32_t now = millis();
 
-  if (now - lastUpdate >= 5000) {
-    lastUpdate = now;
+  if (now - lastUpdate < 500) return;
+  lastUpdate = now;
 
-    // willekeurige increment tussen 0-1
-    homeScore += random(0, 2);
-    awayScore += random(0, 2);
+  homeScore += random(0, 2);
+  awayScore += random(0, 2);
 
-    // JSON payload voor je PWA:
-    // {"home":3,"away":5}
-    String jsonData = "{\"home\":" + String(homeScore) + ",\"away\":" + String(awayScore) + "}";
+  if (homeScore > 99) homeScore = 99;
+  if (awayScore > 99) awayScore = 99;
 
-    if (pScoreChar != nullptr) {
-      pScoreChar->setValue(jsonData.c_str());
-      pScoreChar->notify();  // stuurt data naar de Web Bluetooth client
-    }
+  String jsonData = "{\"home\":" + String(homeScore) + ",\"away\":" + String(awayScore) + "}";
 
-    Serial.print("ScoreBoard data sent: ");
-    Serial.println(jsonData);
+  if (pScoreChar) {
+    // NimBLE: safest is explicit bytes + length
+    pScoreChar->setValue((uint8_t*)jsonData.c_str(), jsonData.length());
+    pScoreChar->notify(true);   // true = notify all subscribed clients (works fine even with 1)
   }
 
-  // verder niks nodig; BLE callbacks en BluetoothSerial lopen op de achtergrond
+  Serial.print("ScoreBoard data sent: ");
+  Serial.println(jsonData);
+}
+
+
+// ---- GAME TIMER (30 min) ----
+static const uint32_t TIMER_TOTAL_MS = 30UL * 60UL * 1000UL;
+
+static uint32_t g_timerStartMs = 0;     // "virtual start" time
+static uint32_t g_timerPausedAtMs = 0;  // when pause was pressed
+static bool     g_timerPaused = false;
+static bool     g_timerInit = false;
+
+static void timerEnsureInit() {
+  if (!g_timerInit) {
+    g_timerStartMs = millis();
+    g_timerPaused = false;
+    g_timerInit = true;
+  }
+}
+
+// returns remaining seconds (0..)
+uint32_t getRemainingTimerSeconds() {
+  timerEnsureInit();
+
+  uint32_t now = millis();
+  uint32_t elapsed = g_timerPaused ? (g_timerPausedAtMs - g_timerStartMs)
+                                   : (now - g_timerStartMs);
+
+  if (elapsed >= TIMER_TOTAL_MS) return 0;
+  return (TIMER_TOTAL_MS - elapsed) / 1000UL;
+}
+
+// Pause or resume
+void timerPause(bool pause) {
+  timerEnsureInit();
+
+  if (pause && !g_timerPaused) {
+    g_timerPaused = true;
+    g_timerPausedAtMs = millis();
+  } else if (!pause && g_timerPaused) {
+    // shift start forward by the paused duration
+    uint32_t now = millis();
+    uint32_t pausedDuration = now - g_timerPausedAtMs;
+    g_timerStartMs += pausedDuration;
+    g_timerPaused = false;
+  }
+}
+
+// Convenience toggle
+void timerTogglePause() {
+  timerPause(!g_timerPaused);
+}
+
+bool timerIsPaused() {
+  timerEnsureInit();
+  return g_timerPaused;
+}
+
+// Reset back to full duration
+void timerReset() {
+  g_timerStartMs = millis();   // start counting from NOW
+  g_timerPausedAtMs = 0;
+  g_timerPaused = false;
+  g_timerInit = true;
 }
 
 // --- helper: two digits for scores ---
@@ -53,17 +120,11 @@ void renderScreen() {
   static int lastHome = -1, lastAway = -1;
   static uint32_t lastTimerSec = 0xFFFFFFFF;
 
-  // compute timer seconds remaining
-  static uint32_t startMs = millis();              // timer starts at boot (first render)
-  const uint32_t totalMs = 30UL * 60UL * 1000UL;
-  uint32_t elapsed = millis() - startMs;
-  uint32_t remainingMs = (elapsed >= totalMs) ? 0 : (totalMs - elapsed);
-  uint32_t timerSec = remainingMs / 1000UL;
+  uint32_t timerSec = getRemainingTimerSeconds();
 
   bool scoreChanged = (homeScore != lastHome) || (awayScore != lastAway);
   bool timerChanged = (timerSec != lastTimerSec);
 
-  // Only redraw when needed (either timer tick or score change)
   if (!scoreChanged && !timerChanged) return;
 
   lastHome = homeScore;
@@ -131,33 +192,33 @@ void drawLogo() {
   // uint16_t black  = dma_display->color565(255, 255, 255);
   uint16_t blue = dma_display->color565(0, 0, 255);   // ball
   uint16_t yellow  = dma_display->color565(255, 255, 0);  // yellow
-  uint16_t white = dma_display->color565(0, 0, 0);     // outline
-  uint16_t black   = dma_display->color565(128, 128, 128);   // grey
+  uint16_t black = dma_display->color565(0, 0, 0);     // outline
+  uint16_t purple   = dma_display->color565(128, 128, 128);   // grey
 
   //basket
-  dma_display->fillRect(51, 0, 26, 34, white); // white background
-  dma_display->drawRect(52, 2, 18, 10, black); // outline
+  dma_display->fillRect(51, 0, 26, 34, black); // white background
+  dma_display->drawRect(52, 2, 18, 10, purple); // outline
   dma_display->fillRect(53, 3, 16, 8, yellow); // basket infill
-  dma_display->drawLine(53, 4, 65, 4, black); // horizontal line
-  dma_display->drawLine(53, 6, 65, 6, black); // horizontal line
-  dma_display->drawLine(53, 8, 65, 8, black); // horizontal line
+  dma_display->drawLine(53, 4, 65, 4, purple); // horizontal line
+  dma_display->drawLine(53, 6, 65, 6, purple); // horizontal line
+  dma_display->drawLine(53, 8, 65, 8, purple); // horizontal line
 
   //pole
-  dma_display->drawRect(71, 10, 4, 24, black);   // outline
-  dma_display->fillRect(72, 11, 2, 23, white);   // blue rectangle
+  dma_display->drawRect(71, 10, 4, 24, purple);   // outline
+  dma_display->fillRect(72, 11, 2, 23, black);   // blue rectangle
 
   //corner
-  dma_display->drawRect(69, 4, 6, 6, black);   // outline
+  dma_display->drawRect(69, 4, 6, 6, purple);   // outline
   dma_display->fillRect(70, 5, 2, 4, yellow);   // yellow rectangle
   dma_display->fillRect(72, 5, 2, 5, yellow);   // yellow rectangle
 
   //speedlines
-  dma_display->drawLine(56, 13, 56, 16, black); // line1
-  dma_display->drawLine(60, 13, 60, 15, black); // line2
-  dma_display->drawLine(64, 13, 64, 16, black); // line3
+  dma_display->drawLine(56, 13, 56, 16, purple); // line1
+  dma_display->drawLine(60, 13, 60, 15, purple); // line2
+  dma_display->drawLine(64, 13, 64, 16, purple); // line3
 
   //ball
-  dma_display->drawCircle(60, 25, 7.5, black); // outline
+  dma_display->drawCircle(60, 25, 7.5, purple); // outline
   dma_display->fillCircle(60, 25, 6.5, blue); // blue infill
   
   //ball tints
