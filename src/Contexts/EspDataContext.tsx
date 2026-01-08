@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useRef,
+  ReactNode,
+} from "react";
 
 declare global {
   interface Navigator {
@@ -6,66 +12,317 @@ declare global {
   }
 }
 
-interface EspData {
-  home: number;
-  away: number;
+interface DeviceData {
+  name: string;
+  data: string;
+  rssi: number;
+  connected: boolean;
+}
+
+interface GatewayMessage {
+  sender?: string;
+  data?: string;
+  rssi?: number;
+  timestamp?: number;
 }
 
 interface EspDataContextType {
-  data: EspData;
+  devices: Map<string, DeviceData>;
   isConnected: boolean;
-  connectToESP32: () => Promise<void>;
+  connectionStatus: string;
+  logMessages: string[];
+  connectToGateway: () => Promise<void>;
+  disconnectGateway: () => Promise<void>;
+  refreshDevices: () => Promise<void>;
+  sendCommand: (command: string) => Promise<void>;
+  clearLog: () => void;
 }
 
 const EspDataContext = createContext<EspDataContextType | undefined>(undefined);
 
 export const EspDataProvider = ({ children }: { children: ReactNode }) => {
-  const [data, setData] = useState<EspData>({ home: 0, away: 0 });
+  const [devices, setDevices] = useState<Map<string, DeviceData>>(new Map());
   const [isConnected, setIsConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState("Disconnected");
+  const [logMessages, setLogMessages] = useState<string[]>([
+    "PWA loaded. Click 'Connect to Gateway' to start.",
+  ]);
 
-  const connectToESP32 = async () => {
+  const deviceRef = useRef<any>(null);
+  const serverRef = useRef<any>(null);
+  const dataCharacteristicRef = useRef<any>(null);
+  const statusCharacteristicRef = useRef<any>(null);
+  const commandCharacteristicRef = useRef<any>(null);
+
+  // UUIDs (must match ESP32 gateway code)
+  const GATEWAY_SERVICE_UUID = "12345678-1234-1234-1234-123456789abc";
+  const GATEWAY_CHAR_DATA_UUID = "22345678-1234-1234-1234-123456789abc";
+  const GATEWAY_CHAR_STATUS_UUID = "32345678-1234-1234-1234-123456789abc";
+  const GATEWAY_CHAR_COMMAND_UUID = "42345678-1234-1234-1234-123456789abc";
+
+  // Log function
+  const addLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = `[${timestamp}] ${message}`;
+    setLogMessages((prev) => [logEntry, ...prev.slice(0, 19)]); // Keep last 20 entries
+    console.log(message);
+  };
+
+  const clearLog = () => {
+    setLogMessages(["[Log cleared]"]);
+  };
+
+  // Parse nested JSON in data field
+  const parseNestedJsonData = (data: string): string => {
     try {
-      console.log("Requesting BLE device...");
+      // Try to parse the data as JSON
+      const parsed = JSON.parse(data);
+
+      // If it has a score field, extract just the score
+      if (parsed && typeof parsed === "object" && "score" in parsed) {
+        return parsed.score.toString();
+      }
+
+      // If it's just a number, return it
+      if (typeof parsed === "number") {
+        return parsed.toString();
+      }
+
+      // Return the original data if we can't extract a score
+      return data;
+    } catch (error) {
+      // If it's not valid JSON, check if it's just a number
+      const num = parseFloat(data);
+      if (!isNaN(num)) {
+        return num.toString();
+      }
+      return data;
+    }
+  };
+
+  // Handle incoming data from gateway
+  const handleGatewayData = (data: string) => {
+    try {
+      // First, try to parse the main JSON
+      const jsonData = JSON.parse(data) as GatewayMessage | DeviceData[];
+
+      if (Array.isArray(jsonData)) {
+        // Device list received - parse each device's data
+        const newDevices = new Map<string, DeviceData>();
+        jsonData.forEach((device: DeviceData) => {
+          // Parse nested JSON in data field
+          const parsedData = parseNestedJsonData(device.data);
+          newDevices.set(device.name, {
+            ...device,
+            data: parsedData,
+          });
+        });
+        setDevices(newDevices);
+        addLog(`Received device list (${jsonData.length} devices)`);
+      } else if (jsonData.sender && jsonData.data !== undefined) {
+        // Single device data received
+        const deviceName = jsonData.sender;
+
+        // Parse nested JSON in data field
+        const parsedData = parseNestedJsonData(jsonData.data);
+
+        const deviceData = {
+          name: deviceName,
+          data: parsedData,
+          rssi: jsonData.rssi || 0,
+          connected: true,
+        };
+
+        setDevices((prev) => {
+          const newDevices = new Map(prev);
+          newDevices.set(deviceName, deviceData);
+          return newDevices;
+        });
+
+        addLog(`Data from ${deviceName}: ${parsedData}`);
+      }
+    } catch (error) {
+      addLog(`Error parsing data: ${error}. Raw data: ${data}`);
+
+      // Try to handle as raw score data (just a number)
+      const num = parseFloat(data);
+      if (!isNaN(num)) {
+        // This might be a raw score from a sender
+        const deviceData = {
+          name: "Unknown",
+          data: num.toString(),
+          rssi: 0,
+          connected: true,
+        };
+
+        setDevices((prev) => {
+          const newDevices = new Map(prev);
+          newDevices.set("Unknown", deviceData);
+          return newDevices;
+        });
+
+        addLog(`Parsed raw score: ${num}`);
+      }
+    }
+  };
+
+  // Connect to BLE Gateway
+  const connectToGateway = async () => {
+    try {
+      addLog("Requesting BLE device...");
+      setConnectionStatus("Searching for gateway...");
+
+      // Request device with the correct name from ESP32 code
       const device = await (navigator as any).bluetooth.requestDevice({
-        filters: [{ namePrefix: "centralUnit" }],
-        optionalServices: ["3bd083ef-9c40-4fd1-992f-d0450276a783"],
+        filters: [{ name: "ESP32-BLE-Gateway" }],
+        optionalServices: [GATEWAY_SERVICE_UUID],
       });
 
-      console.log(`Connected to device: ${device.name}`);
-      const server = await device.gatt.connect();
+      deviceRef.current = device;
+      addLog(`Found device: ${device.name}`);
 
-      const service = await server.getPrimaryService(
-        "3bd083ef-9c40-4fd1-992f-d0450276a783"
+      deviceRef.current.addEventListener("gattserverdisconnected", () => {
+        addLog("Disconnected from BLE Gateway");
+        setIsConnected(false);
+        setConnectionStatus("Disconnected");
+      });
+
+      addLog("Connecting to GATT server...");
+      setConnectionStatus("Connecting...");
+      const server = await deviceRef.current.gatt.connect();
+      serverRef.current = server;
+
+      addLog("Getting service...");
+      const service = await serverRef.current.getPrimaryService(
+        GATEWAY_SERVICE_UUID
       );
-      const characteristic = await service.getCharacteristic(
-        "a50704f1-ba55-44cf-96ec-2de6ded239d4"
+
+      addLog("Getting characteristics...");
+      // Get data characteristic
+      const dataCharacteristic = await service.getCharacteristic(
+        GATEWAY_CHAR_DATA_UUID
       );
+      dataCharacteristicRef.current = dataCharacteristic;
 
-      setIsConnected(true);
+      // Get status characteristic
+      const statusCharacteristic = await service.getCharacteristic(
+        GATEWAY_CHAR_STATUS_UUID
+      );
+      statusCharacteristicRef.current = statusCharacteristic;
 
-      await characteristic.startNotifications();
-      characteristic.addEventListener(
+      // Get command characteristic
+      const commandCharacteristic = await service.getCharacteristic(
+        GATEWAY_CHAR_COMMAND_UUID
+      );
+      commandCharacteristicRef.current = commandCharacteristic;
+
+      // Subscribe to data notifications
+      await dataCharacteristicRef.current.startNotifications();
+      dataCharacteristicRef.current.addEventListener(
         "characteristicvaluechanged",
         (event: Event) => {
-          const value = new TextDecoder().decode((event.target as any).value);
-          console.log("Bluetooth message received:", value);
           try {
-            const parsedData = JSON.parse(value);
-            console.log("Parsed data:", parsedData);
-            setData(parsedData);
-          } catch (error) {
-            console.error("Invalid JSON from ESP32:", value, error);
+            const value = new TextDecoder().decode((event.target as any).value);
+            handleGatewayData(value);
+          } catch (err) {
+            addLog(`Error processing notification: ${err}`);
           }
         }
       );
+
+      // Subscribe to status notifications
+      await statusCharacteristicRef.current.startNotifications();
+
+      // Read initial status
+      const statusValue = await statusCharacteristicRef.current.readValue();
+      const status = new TextDecoder().decode(statusValue);
+      addLog(`Gateway status: ${status}`);
+
+      setIsConnected(true);
+      setConnectionStatus("Connected");
+      addLog("✅ Successfully connected to BLE Gateway");
+
+      // Request initial device list
+      await refreshDevices();
     } catch (err) {
-      console.error("BLE Connection Error:", (err as Error).message);
+      addLog(`Connection failed: ${(err as Error).message}`);
       setIsConnected(false);
+      setConnectionStatus("Connection failed");
+    }
+  };
+
+  // Disconnect from gateway
+  const disconnectGateway = async () => {
+    if (deviceRef.current && deviceRef.current.gatt.connected) {
+      try {
+        deviceRef.current.gatt.disconnect();
+        addLog("Disconnected from BLE Gateway");
+      } catch (err) {
+        addLog(`Error disconnecting: ${(err as Error).message}`);
+      }
+    }
+    setIsConnected(false);
+    setConnectionStatus("Disconnected");
+    setDevices(new Map());
+
+    // Clear refs
+    deviceRef.current = null;
+    serverRef.current = null;
+    dataCharacteristicRef.current = null;
+    statusCharacteristicRef.current = null;
+    commandCharacteristicRef.current = null;
+  };
+
+  // Refresh device list
+  const refreshDevices = async () => {
+    if (!commandCharacteristicRef.current) {
+      addLog("Not connected to gateway");
+      return;
+    }
+
+    try {
+      const encoder = new TextEncoder();
+      await commandCharacteristicRef.current.writeValue(
+        encoder.encode("get_devices")
+      );
+      addLog("Requested device list from gateway");
+    } catch (err) {
+      addLog(`Error refreshing devices: ${(err as Error).message}`);
+    }
+  };
+
+  // Send command to gateway
+  const sendCommand = async (command: string) => {
+    if (!commandCharacteristicRef.current) {
+      addLog("Not connected to gateway");
+      return;
+    }
+
+    try {
+      const encoder = new TextEncoder();
+      await commandCharacteristicRef.current.writeValue(
+        encoder.encode(command)
+      );
+      addLog(`Command sent: ${command}`);
+    } catch (err) {
+      addLog(`Error sending command: ${(err as Error).message}`);
     }
   };
 
   return (
-    <EspDataContext.Provider value={{ data, isConnected, connectToESP32 }}>
+    <EspDataContext.Provider
+      value={{
+        devices,
+        isConnected,
+        connectionStatus,
+        logMessages,
+        connectToGateway,
+        disconnectGateway,
+        refreshDevices,
+        sendCommand,
+        clearLog,
+      }}
+    >
       {children}
     </EspDataContext.Provider>
   );

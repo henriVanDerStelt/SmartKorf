@@ -11,10 +11,13 @@ function SyncUser() {
     const upsertUser = async () => {
       const { data, error } = await supabase
         .from("users")
-        .upsert({
-          clerk_user_id: user.id,
-          email: user.primaryEmailAddress?.emailAddress || null,
-        })
+        .upsert(
+          {
+            clerk_user_id: user.id,
+            email: user.primaryEmailAddress?.emailAddress || null,
+          },
+          { onConflict: "clerk_user_id" }
+        )
         .select(); // optioneel: return het aangemaakte/gewijzigde record
 
       if (error) {

@@ -6,7 +6,7 @@ import { useEspData } from "../../Contexts/EspDataContext";
 
 function Home() {
   const [showPopup, setShowPopup] = useState(false);
-  const { data, isConnected, connectToESP32 } = useEspData();
+  const { devices, isConnected, connectToGateway } = useEspData();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -40,12 +40,24 @@ function Home() {
             >
               <div className="popup-device-list">
                 <button
-                  onClick={connectToESP32}
+                  onClick={connectToGateway}
                   disabled={isConnected}
                   className="btn-filled"
                 >
-                  {isConnected ? "Connected" : "Connect"}
+                  {isConnected ? "Connected" : "Connect to Gateway"}
                 </button>
+                {isConnected && (
+                  <div className="connected-devices">
+                    <p>Connected devices:</p>
+                    <ul>
+                      {Array.from(devices.entries()).map(([name, device]) => (
+                        <li key={name}>
+                          {device.name} - RSSI: {device.rssi}dBm
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </Popup>
           )}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 declare global {
   interface Navigator {
@@ -9,6 +9,7 @@ declare global {
 export default function useEspData() {
   const [data, setData] = useState({ home: 0, away: 0 });
   const [isConnected, setIsConnected] = useState(false);
+  const characteristicRef = useRef<any>(null);
 
   const connectToESP32 = async () => {
     try {
@@ -28,6 +29,7 @@ export default function useEspData() {
         "a50704f1-ba55-44cf-96ec-2de6ded239d4"
       );
 
+      characteristicRef.current = characteristic;
       setIsConnected(true);
 
       await characteristic.startNotifications();
@@ -49,5 +51,25 @@ export default function useEspData() {
     }
   };
 
-  return { data, isConnected, connectToESP32 };
+  const sendMessage = async (message: string) => {
+    if (!characteristicRef.current) {
+      console.error("Not connected to ESP32");
+      return;
+    }
+
+    try {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(message);
+      await characteristicRef.current.writeValue(data);
+      console.log("Message sent to ESP32:", message);
+    } catch (err) {
+      console.error("Error sending message:", (err as Error).message);
+    }
+  };
+
+  const sendHelloWorld = () => {
+    sendMessage("hello world");
+  };
+
+  return { data, isConnected, connectToESP32, sendMessage, sendHelloWorld };
 }

@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import "./timer.css";
+import { supabase } from "../../supabaseClient";
+import { useUser } from "@clerk/clerk-react";
+import { useEspData } from "../../Contexts/EspDataContext";
+
+const TIMER_DURATION = 30; // time in minutes
 
 function Timer() {
-  const [timeLeft, setTimeLeft] = useState(30 * 60 * 100); // 30 minuten in centiseconden (1/100 sec)
+  const { user } = useUser();
+  const { sendCommand } = useEspData();
+  const [timeLeft, setTimeLeft] = useState(TIMER_DURATION * 60 * 100);
   const [isRunning, setIsRunning] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
-  const pausedTimeRef = useRef<number>(30 * 60 * 100);
+  const pausedTimeRef = useRef<number>(TIMER_DURATION * 60 * 100);
+  const [currentGameId, setCurrentGameId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isRunning && timeLeft > 0) {
@@ -23,6 +31,10 @@ function Timer() {
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
           }
+          // Stuur end_time naar database
+          if (currentGameId) {
+            finishGame();
+          }
         } else {
           setTimeLeft(newTime);
         }
@@ -38,7 +50,7 @@ function Timer() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isRunning]);
+  }, [isRunning, currentGameId]);
 
   const formatTime = (centiseconds: number) => {
     const totalSeconds = Math.floor(centiseconds / 100);
@@ -50,25 +62,88 @@ function Timer() {
       .padStart(2, "0")}.${cs.toString().padStart(2, "0")}`;
   };
 
-  const handleStart = () => {
-    if (timeLeft > 0) {
-      setIsRunning(true);
-    }
-  };
-
   const handleStop = () => {
     setIsRunning(false);
   };
 
   const handleToggle = () => {
     if (timeLeft > 0) {
-      setIsRunning(!isRunning);
+      if (!isRunning) {
+        handleStart();
+      } else {
+        setIsRunning(false);
+      }
     }
   };
 
   const handleReset = () => {
     setIsRunning(false);
-    setTimeLeft(30 * 60 * 100);
+    setTimeLeft(TIMER_DURATION * 60 * 100);
+  };
+
+  const finishGame = async () => {
+    try {
+      const { error } = await supabase
+        .from("games")
+        .update({
+          end_time: new Date().toISOString(),
+        })
+        .eq("id", currentGameId);
+
+      if (error) {
+        console.error("Error finishing game:", error);
+      } else {
+        console.log("Game finished with end_time");
+        setCurrentGameId(null);
+        try {
+          localStorage.removeItem("currentGameId");
+        } catch (_) {}
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleStart = async () => {
+    if (timeLeft > 0) {
+      // Check of er al een game is
+      if (!currentGameId) {
+        try {
+          const { data, error } = await supabase
+            .from("games")
+            .insert({
+              start_time: new Date().toISOString(),
+              home: "Home",
+              away: "Away",
+              user: user?.id || null,
+            })
+            .select()
+            .single();
+
+          if (error) {
+            console.error("Error creating game:", error);
+          } else {
+            setCurrentGameId(data.id);
+            try {
+              localStorage.setItem("currentGameId", data.id);
+            } catch (_) {}
+            console.log("New game created:", data);
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      setIsRunning(true);
+    }
+  };
+
+  const sendTestCommand = () => {
+    sendCommand("test");
+  };
+
+  const sendHelloWorld = () => {
+    sendCommand("hello");
   };
 
   return (
@@ -86,6 +161,12 @@ function Timer() {
         </button>
         <button className="timer-button reset" onClick={handleReset}>
           Reset
+        </button>
+        <button className="timer-button" onClick={sendHelloWorld}>
+          Test
+        </button>
+        <button className="timer-button" onClick={sendTestCommand}>
+          Send Test
         </button>
       </div>
     </div>
