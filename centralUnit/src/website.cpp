@@ -3,9 +3,8 @@
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
-// #include <map>
-// #include <vector>
 #include <website.h>
+#include <ArduinoJson.h>
 
 // Structure for connected sender devices
 struct SenderDevice {
@@ -79,24 +78,78 @@ class GatewayServerCallbacks : public BLEServerCallbacks {
 
 // Callback for commands from PWA
 class CommandCallbacks : public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic* pCharacteristic){
-        String cmdStr = pCharacteristic->getValue();
-        std::string command = cmdStr.c_str();
+  void onWrite(BLECharacteristic* pCharacteristic) override {
+    std::string raw = pCharacteristic->getValue();
+    String msg = String(raw.c_str());
+    msg.trim();
 
-        if (command.length() > 0) {
-            Serial.print("📱 Command from PWA: ");
-            Serial.println(command.c_str());
+    if (msg.length() == 0) return;
 
-            // Handle commands
-            if (command == "get_devices") {
-                sendDeviceListToPWA();
-            } else if (command == "reset") {
-                Serial.println("Reset command received");
-            } else if (command == "hello") {
-                timerReset();
-            }
+    Serial.print("Command from PWA: ");
+    Serial.println(msg);
+
+    // ---------- JSON COMMANDS ----------
+    if (msg.startsWith("{")) {
+      StaticJsonDocument<256> doc;
+      DeserializationError err = deserializeJson(doc, msg);
+
+      if (err) {
+        Serial.print("JSON parse failed: ");
+        Serial.println(err.c_str());
+        return;
+      }
+
+      const char* command = doc["Command"];
+      if (!command) {
+        Serial.println("JSON missing 'Command'");
+        return;
+      }
+
+      String cmd = String(command);
+      cmd.toUpperCase();
+
+      // ---- CHANGE NAMES ----
+      if (cmd == "CHANGE NAMES") {
+        JsonArray values = doc["Value"];
+
+        if (!values || values.size() != 2) {
+          Serial.println("CHANGE NAMES requires Value[2]");
+          return;
         }
+
+        String newHome = values[0].as<String>();
+        String newAway = values[1].as<String>();
+
+        Serial.print("Changing names → ");
+        Serial.print(newHome);
+        Serial.print(" vs ");
+        Serial.println(newAway);
+
+        changeNames(newHome, newAway);  //  CALL
+        return;
+      } else if (cmd == "TIME") {
+        Serial.println("Change time command received");
+        return;
+      } else if (cmd == "SCORE") {
+        Serial.println("Change score command received");
+        return;
+      }
+
+      Serial.println("Unknown JSON command");
+      return;
     }
+
+    // ---------- LEGACY STRING COMMANDS ----------
+    if (msg == "get_devices") {
+      sendDeviceListToPWA();
+    } 
+    else if (msg == "reset") {
+      Serial.println("Reset command received");
+    } 
+    else if (msg == "hello") {
+      timerReset();
+    }
+  }
 };
 
 // Send device list to PWA
@@ -232,7 +285,7 @@ static void senderNotificationCallback(BLERemoteCharacteristic* pRemoteCharacter
     }
 
     if (senderName == "Unknown") {
-        Serial.println("❌ Unknown sender for notification");
+        Serial.println("Unknown sender for notification");
         return;
     }
 
@@ -248,7 +301,7 @@ static void senderNotificationCallback(BLERemoteCharacteristic* pRemoteCharacter
         receivedData += (char)pData[i];
     }
 
-    Serial.print("📩 From ");
+    Serial.print("From ");
     Serial.print(senderName.c_str());
     Serial.print(": ");
     Serial.println(receivedData.c_str());
@@ -261,7 +314,7 @@ static void senderNotificationCallback(BLERemoteCharacteristic* pRemoteCharacter
         senderDevices[senderName]->lastData = scoreStr;
         senderDevices[senderName]->lastUpdate = millis();
 
-        Serial.print("✅ Updated ");
+        Serial.print("Updated ");
         Serial.print(senderName.c_str());
         Serial.print(" score to: ");
         Serial.println(scoreStr);
@@ -352,24 +405,24 @@ void connectToSender(BLEAdvertisedDevice* device){
 
 // Scan for sender devices
 void scanForSenders(){
-    Serial.println("\n🔍 Scanning for sender devices...");
+    Serial.println("\nScanning for sender devices...");
 
     BLEScan* pBLEScan = BLEDevice::getScan();
     pBLEScan->setActiveScan(true);
     pBLEScan->setInterval(100);
     pBLEScan->setWindow(99);
 
-    BLEScanResults* foundDevices = pBLEScan->start(3, false); // 3 second scan
+    BLEScanResults foundDevices = pBLEScan->start(3, false); // 3 second scan
 
 
     Serial.print("Found ");
-    Serial.print(foundDevices->getCount());
+    Serial.print(foundDevices.getCount());
     Serial.println(" total devices");
 
     int targetFound = 0;
 
-    for (int i = 0; i < foundDevices->getCount(); i++) {
-        BLEAdvertisedDevice device = foundDevices->getDevice(i);
+    for (int i = 0; i < foundDevices.getCount(); i++) {
+        BLEAdvertisedDevice device = foundDevices.getDevice(i);
 
         if (device.haveName()) {
             std::string deviceName = std::string(device.getName().c_str());
@@ -398,7 +451,7 @@ void scanForSenders(){
 
     pBLEScan->clearResults();
 
-    Serial.print("✅ Found ");
+    Serial.print("Found ");
     Serial.print(targetFound);
     Serial.println(" target sender(s)");
 }
@@ -409,6 +462,13 @@ void setupBLEGateway(){
 
     // Initialize BLE
     BLEDevice::init(DEVICE_NAME);
+
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9);   // advertising
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, ESP_PWR_LVL_P9);  // scanning (optional)
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_CONN_HDL0, ESP_PWR_LVL_P9); // connection handle 0
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_CONN_HDL1, ESP_PWR_LVL_P9); // (optional) if multiple conns
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_CONN_HDL2, ESP_PWR_LVL_P9);
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_CONN_HDL3, ESP_PWR_LVL_P9);
 
     // Create BLE Server for PWA
     pServer = BLEDevice::createServer();
@@ -444,7 +504,7 @@ void setupBLEGateway(){
 
     BLEDevice::startAdvertising();
 
-    Serial.println("🎯 BLE Gateway advertising for PWA");
+    Serial.println("BLE Gateway advertising for PWA");
     Serial.print("Device Name: ");
     Serial.println(DEVICE_NAME);
 }
@@ -471,7 +531,7 @@ void bleInit(){
 void handleBluetooth(){
     // Handle PWA connection state
     if (!pwaConnected && oldPwaConnected) {
-        delay(500);
+        // delay(500);
         oldPwaConnected = pwaConnected;
     }
 
@@ -488,5 +548,5 @@ void handleBluetooth(){
         lastScanTime = millis();
     }
 
-    delay(100);
+    // delay(100);
 }

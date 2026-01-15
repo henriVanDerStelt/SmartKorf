@@ -23,8 +23,14 @@ extern int awayScore;
 extern BluetoothSerial SerialBT;     // Now the type is known everywhere
 extern BLECharacteristic* pScoreChar;
 
+uint32_t getRemainingTimerSeconds();
+
 void websiteSetup();
-void sendScore();
+void scoreRNG();
+void sendScoreNew();
+
+void changeNames(String newHome, String newAway);
+
 void bleInit();
 void handleBluetooth();
 

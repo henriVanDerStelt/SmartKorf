@@ -14,7 +14,8 @@ void setup(){
 
 void loop(){
   handleBluetooth();
-  sendScore();
+  scoreRNG();
+  sendScoreNew();
   renderScreen();
   // drawPNG("/monkey.png", 0, 0);
   // dma_display->flipDMABuffer();

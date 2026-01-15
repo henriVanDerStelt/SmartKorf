@@ -18,15 +18,17 @@ CRGB ColorFromCurrentPalette(uint8_t index = 0, uint8_t brightness = 255, TBlend
 // define globals exactly once:
 int homeScore = 0;
 int awayScore = 0;
+int oldHome = 0;
+int oldAway = 0;
 
 BluetoothSerial SerialBT;      // only if you use BT classic
 BLECharacteristic* pScoreChar = nullptr;
 
-void sendScore() {
+void scoreRNG() {
   static uint32_t lastUpdate = 0;
   uint32_t now = millis();
 
-  if (now - lastUpdate < 500) return;
+  if (now - lastUpdate < 5000) return;
   lastUpdate = now;
 
   homeScore += random(0, 2);
@@ -34,10 +36,25 @@ void sendScore() {
 
   if (homeScore > 99) homeScore = 99;
   if (awayScore > 99) awayScore = 99;
+}
 
-  String jsonData = "{\"home\":" + String(homeScore) + ",\"away\":" + String(awayScore) + "}";
+void sendScoreNew(){
+  static uint32_t lastUpdate = 0;
+  uint32_t now = millis();
 
-  if (pScoreChar) {
+  if (oldHome == homeScore && oldAway == awayScore) return;
+  lastUpdate = now;
+  uint32_t matchTime = getRemainingTimerSeconds();
+  String jsonData =
+    "{"
+    "\"From\":\"CentralUnit\","
+    "\"Time\":" + String(matchTime) + ","
+    "\"Score\":[" + String(homeScore) + "," + String(awayScore) + "],"
+    "\"Accuracy\":[70,65],"
+    "\"GoalAttempt\":[54,48]"
+    "}";
+
+    if (pScoreChar) {
     // NimBLE: safest is explicit bytes + length
     pScoreChar->setValue((uint8_t*)jsonData.c_str(), jsonData.length());
     pScoreChar->notify(true);   // true = notify all subscribed clients (works fine even with 1)
@@ -45,8 +62,9 @@ void sendScore() {
 
   Serial.print("ScoreBoard data sent: ");
   Serial.println(jsonData);
+  oldHome = homeScore;
+  oldAway = awayScore;
 }
-
 
 // ---- GAME TIMER (30 min) ----
 static const uint32_t TIMER_TOTAL_MS = 30UL * 60UL * 1000UL;
@@ -116,6 +134,14 @@ static inline String twoDigit(int v) {
   return String(v);
 }
 
+String homeName = "HOME";
+String awayName = "AWAY";
+
+void changeNames(String newHome, String newAway) {
+  homeName = newHome.substring(0, 4); 
+  awayName = newAway.substring(0, 4);
+}
+
 void renderScreen() {
   static int lastHome = -1, lastAway = -1;
   static uint32_t lastTimerSec = 0xFFFFFFFF;
@@ -159,12 +185,12 @@ void renderScreen() {
   // ---- HOME ----
   dma_display->setTextSize(1);
   dma_display->setCursor(14, 1);
-  dma_display->print("HOME");
+  dma_display->print(homeName);
 
     // ---- AWAY ----
   dma_display->setTextSize(1);
   dma_display->setCursor(90, 1);
-  dma_display->print("AWAY");
+  dma_display->print(awayName);
 
   // ---- TIME ----
   dma_display->setTextSize(1);
