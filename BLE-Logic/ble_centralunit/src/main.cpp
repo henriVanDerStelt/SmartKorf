@@ -3,6 +3,8 @@
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
+#include <BLEScan.h>
+#include <BLEAdvertisedDevice.h>
 #include <map>
 #include <vector>
 
@@ -10,7 +12,7 @@
 #define DEVICE_NAME "ESP32-BLE-Gateway"
 
 // Service UUIDs
-#define SENDER_SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b" // From senders
+#define SENDER_SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define SENDER_CHAR_UUID_TX "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
 // Service for PWA connection
@@ -94,7 +96,7 @@ class GatewayServerCallbacks : public BLEServerCallbacks {
 class CommandCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* pCharacteristic)
     {
-        std::string command = pCharacteristic->getValue().c_str();;
+        std::string command = pCharacteristic->getValue().c_str();
 
         if (command.length() > 0) {
             Serial.print("📱 Command from PWA: ");
@@ -159,7 +161,7 @@ void sendSensorDataToPWA(const std::string& senderName, const String& data, int 
     // Format: {"sender":"DeviceName","data":"ActualDataFromSender","rssi":-50,"timestamp":123456}
     String jsonData = "{";
     jsonData += "\"sender\":\"" + String(senderName.c_str()) + "\",";
-    jsonData += "\"data\":\"" + data + "\","; // ACTUAL data from sender
+    jsonData += "\"data\":\"" + data + "\",";
     jsonData += "\"rssi\":" + String(rssi) + ",";
     jsonData += "\"timestamp\":" + String(millis());
     jsonData += "}";
@@ -181,6 +183,7 @@ bool isTargetSender(const std::string& deviceName)
     }
     return false;
 }
+
 // Helper function to extract score from possibly broken JSON
 String extractScoreFromData(String data)
 {
@@ -188,10 +191,8 @@ String extractScoreFromData(String data)
     int scorePos = data.indexOf("\"score\":");
 
     if (scorePos != -1) {
-        // Found JSON with score field
-        int colonPos = scorePos + 8; // Length of "\"score\":"
+        int colonPos = scorePos + 8;
 
-        // Find the end of the score number
         int endPos = -1;
         for (int i = colonPos; i < data.length(); i++) {
             char c = data.charAt(i);
@@ -208,11 +209,9 @@ String extractScoreFromData(String data)
         }
     }
 
-    // If no JSON found, try to parse as plain number
     data.trim();
     for (int i = 0; i < data.length(); i++) {
         if (!isdigit(data.charAt(i))) {
-            // Not a pure number, try to extract digits
             String digits = "";
             for (int j = 0; j < data.length(); j++) {
                 if (isdigit(data.charAt(j))) {
@@ -226,14 +225,12 @@ String extractScoreFromData(String data)
         }
     }
 
-    // If we get here, it might be a plain number
     return data;
 }
+
 static void senderNotificationCallback(
     BLERemoteCharacteristic* pRemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify)
 {
-
-    // Find which sender this belongs to
     std::string senderName = "Unknown";
     if (characteristicToSenderMap.find(pRemoteCharacteristic) != characteristicToSenderMap.end()) {
         senderName = characteristicToSenderMap[pRemoteCharacteristic];
@@ -252,13 +249,11 @@ static void senderNotificationCallback(
         return;
     }
 
-    // Get RSSI for this sender
     int rssi = -99;
     if (senderDevices.find(senderName) != senderDevices.end()) {
         rssi = senderDevices[senderName]->rssi;
     }
 
-    // Convert data to string
     String receivedData = "";
     for (int i = 0; i < length; i++) {
         receivedData += (char)pData[i];
@@ -269,10 +264,8 @@ static void senderNotificationCallback(
     Serial.print(": ");
     Serial.println(receivedData.c_str());
 
-    // Extract score from the data (handle broken JSON)
     String scoreStr = extractScoreFromData(receivedData);
 
-    // Update device info with extracted score
     if (senderDevices.find(senderName) != senderDevices.end()) {
         senderDevices[senderName]->lastData = scoreStr;
         senderDevices[senderName]->lastUpdate = millis();
@@ -283,10 +276,8 @@ static void senderNotificationCallback(
         Serial.println(scoreStr);
     }
 
-    // Forward just the score to PWA
     sendSensorDataToPWA(senderName, scoreStr, rssi);
 }
-
 
 // Connect to a sender device
 void connectToSender(BLEAdvertisedDevice* device)
@@ -296,95 +287,139 @@ void connectToSender(BLEAdvertisedDevice* device)
     Serial.print("🔗 Connecting to sender: ");
     Serial.println(deviceName.c_str());
 
-    // Create client for this sender
-    BLEClient* pClient = BLEDevice::createClient();
-
-    if (pClient->connect(device)) {
-        Serial.println("   Connected to device");
-
-        BLERemoteService* pRemoteService = pClient->getService(SENDER_SERVICE_UUID);
-        if (pRemoteService == nullptr) {
-            Serial.println("   ❌ Service not found");
-            delete pClient;
-            return;
-        }
-
-        Serial.println("   Service found");
-
-        BLERemoteCharacteristic* pRemoteTX = pRemoteService->getCharacteristic(SENDER_CHAR_UUID_TX);
-        if (pRemoteTX == nullptr) {
-            Serial.println("   ❌ TX characteristic not found");
-            delete pClient;
-            return;
-        }
-
-        Serial.println("   TX characteristic found");
-
-        // Store device info FIRST
-        SenderDevice* sender = new SenderDevice();
-        sender->name = deviceName;
-        sender->address = device->getAddress();
-        sender->client = pClient;
-        sender->txCharacteristic = pRemoteTX;
-        sender->connected = true;
-        sender->rssi = device->getRSSI();
-        sender->lastUpdate = millis();
-
-        senderDevices[deviceName] = sender;
-        characteristicToSenderMap[pRemoteTX] = deviceName;
-
-        // Register for notifications
-        if (pRemoteTX->canNotify()) {
-            Serial.println("   Registering for notifications...");
-
-            // Correct way to register for notifications
-            pRemoteTX->registerForNotify(senderNotificationCallback);
-
-            Serial.println("   ✅ Notification registration successful");
-        }
-
-        // Read initial value
-        std::string value = pRemoteTX->readValue().c_str();
-        if (!value.empty()) {
-            sender->lastData = String(value.c_str());
-            Serial.print("   Initial value: ");
-            Serial.println(value.c_str());
-        }
-
-        Serial.print("✅ Connected to sender: ");
-        Serial.println(deviceName.c_str());
-
-        // Notify PWA about new connection
-        if (pwaConnected) {
-            sendDeviceListToPWA();
-        }
-
+    // Check if already connected
+    if (senderDevices.find(deviceName) != senderDevices.end() && 
+        senderDevices[deviceName]->connected) {
+        Serial.println("   ⚠️ Already connected, skipping");
         return;
     }
 
-    // Connection failed
-    Serial.print("❌ Failed to connect to sender: ");
-    Serial.println(deviceName.c_str());
-    delete pClient;
-}
+    // Create client for this sender
+    BLEClient* pClient = BLEDevice::createClient();
+    
+    // Set a timeout for connection
+    pClient->setClientCallbacks(nullptr);
 
+    Serial.print("   Attempting connection to: ");
+    Serial.println(device->getAddress().toString().c_str());
+
+    // Try to connect with timeout
+    bool connected = false;
+    unsigned long connectStart = millis();
+    
+    while (millis() - connectStart < 5000) { // 5 second timeout
+        if (pClient->connect(device)) {
+            connected = true;
+            break;
+        }
+        delay(100);
+    }
+
+    if (!connected) {
+        Serial.println("   ❌ Connection timeout");
+        delete pClient;
+        return;
+    }
+
+    Serial.println("   ✅ Connected to device");
+
+    // Wait a bit for services to be discovered
+    delay(100);
+
+    // Get the service
+    BLERemoteService* pRemoteService = pClient->getService(SENDER_SERVICE_UUID);
+    if (pRemoteService == nullptr) {
+        Serial.println("   ❌ Service not found");
+        pClient->disconnect();
+        delete pClient;
+        return;
+    }
+
+    Serial.println("   ✅ Service found");
+
+    // Get the TX characteristic
+    BLERemoteCharacteristic* pRemoteTX = pRemoteService->getCharacteristic(SENDER_CHAR_UUID_TX);
+    if (pRemoteTX == nullptr) {
+        Serial.println("   ❌ TX characteristic not found");
+        pClient->disconnect();
+        delete pClient;
+        return;
+    }
+
+    Serial.println("   ✅ TX characteristic found");
+
+    // Store device info
+    SenderDevice* sender = new SenderDevice();
+    sender->name = deviceName;
+    sender->address = device->getAddress();
+    sender->client = pClient;
+    sender->txCharacteristic = pRemoteTX;
+    sender->connected = true;
+    sender->rssi = device->getRSSI();
+    sender->lastUpdate = millis();
+    sender->lastData = "0"; // Default score
+
+    senderDevices[deviceName] = sender;
+    characteristicToSenderMap[pRemoteTX] = deviceName;
+
+    // Register for notifications
+    if (pRemoteTX->canNotify()) {
+        Serial.println("   📢 Registering for notifications...");
+        
+        // Register the callback FIRST
+        pRemoteTX->registerForNotify(senderNotificationCallback);
+        
+        // Then enable notifications
+        uint8_t cccdValue[] = {0x01, 0x00};
+        BLERemoteDescriptor* pCCCD = pRemoteTX->getDescriptor(BLEUUID((uint16_t)0x2902));
+        if (pCCCD != nullptr) {
+            if (pCCCD->writeValue(cccdValue, 2, true)) {
+                Serial.println("   ✅ Notifications enabled");
+            } else {
+                Serial.println("   ⚠️ Failed to enable notifications");
+            }
+        }
+    }
+
+    // Try to read initial value
+    std::string value = pRemoteTX->readValue().c_str();
+    if (!value.empty()) {
+        sender->lastData = String(value.c_str());
+        Serial.print("   📊 Initial value: ");
+        Serial.println(value.c_str());
+    }
+
+    Serial.print("✅ Successfully connected to sender: ");
+    Serial.println(deviceName.c_str());
+
+    // Notify PWA if connected
+    if (pwaConnected) {
+        sendDeviceListToPWA();
+    }
+}
 // Scan for sender devices
 void scanForSenders()
 {
     Serial.println("\n🔍 Scanning for sender devices...");
+    Serial.println("⚠️  Temporarily pausing PWA advertising for scan...");
+
+    // Pause PWA advertising during scan
+    BLEDevice::stopAdvertising();
 
     BLEScan* pBLEScan = BLEDevice::getScan();
     pBLEScan->setActiveScan(true);
     pBLEScan->setInterval(100);
     pBLEScan->setWindow(99);
 
-    BLEScanResults* foundDevices = pBLEScan->start(3, false); // 3 second scan
+    // Scan for 3 seconds
+    BLEScanResults* foundDevices = pBLEScan->start(3, false);
 
     Serial.print("Found ");
     Serial.print(foundDevices->getCount());
     Serial.println(" total devices");
 
     int targetFound = 0;
+    int connected = 0;
 
     for (int i = 0; i < foundDevices->getCount(); i++) {
         BLEAdvertisedDevice device = foundDevices->getDevice(i);
@@ -395,20 +430,26 @@ void scanForSenders()
             if (isTargetSender(deviceName)) {
                 targetFound++;
 
-                Serial.print("   Target found: ");
+                Serial.print("   🎯 Target found: ");
                 Serial.print(deviceName.c_str());
                 Serial.print(" (RSSI: ");
                 Serial.print(device.getRSSI());
-                Serial.println(" dBm)");
+                Serial.print(" dBm) - ");
 
                 // Check if already connected
-                if (senderDevices.find(deviceName) == senderDevices.end() || !senderDevices[deviceName]->connected) {
-                    // Connect to this sender
-                    connectToSender(&device);
-                } else {
-                    // Update RSSI for connected device
+                if (senderDevices.find(deviceName) != senderDevices.end() && 
+                    senderDevices[deviceName]->connected) {
+                    Serial.println("Already connected");
                     senderDevices[deviceName]->rssi = device.getRSSI();
                     senderDevices[deviceName]->lastUpdate = millis();
+                    connected++;
+                } else {
+                    Serial.println("Attempting connection...");
+                    connectToSender(&device);
+                    if (senderDevices.find(deviceName) != senderDevices.end() && 
+                        senderDevices[deviceName]->connected) {
+                        connected++;
+                    }
                 }
             }
         }
@@ -416,9 +457,15 @@ void scanForSenders()
 
     pBLEScan->clearResults();
 
-    Serial.print("✅ Found ");
+    // Restart PWA advertising
+    BLEDevice::startAdvertising();
+    Serial.println("✅ Restarted PWA advertising");
+
+    Serial.print("\n📊 Scan Summary: ");
     Serial.print(targetFound);
-    Serial.println(" target sender(s)");
+    Serial.print(" target(s) found, ");
+    Serial.print(connected);
+    Serial.println(" connected");
 }
 
 // Setup BLE Gateway
@@ -428,6 +475,12 @@ void setupBLEGateway()
 
     // Initialize BLE
     BLEDevice::init(DEVICE_NAME);
+    
+    // Set power to maximum
+    esp_power_level_t power = ESP_PWR_LVL_P9;
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, power);
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, power);
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, power);
 
     // Create BLE Server for PWA
     pServer = BLEDevice::createServer();
@@ -438,34 +491,60 @@ void setupBLEGateway()
 
     // Create Data Characteristic
     pDataCharacteristic = pService->createCharacteristic(
-        GATEWAY_CHAR_DATA_UUID, BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_READ);
+        GATEWAY_CHAR_DATA_UUID, 
+        BLECharacteristic::PROPERTY_NOTIFY | 
+        BLECharacteristic::PROPERTY_READ
+    );
     pDataCharacteristic->addDescriptor(new BLE2902());
 
     // Create Status Characteristic
     pStatusCharacteristic = pService->createCharacteristic(
-        GATEWAY_CHAR_STATUS_UUID, BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_READ);
+        GATEWAY_CHAR_STATUS_UUID, 
+        BLECharacteristic::PROPERTY_NOTIFY | 
+        BLECharacteristic::PROPERTY_READ
+    );
     pStatusCharacteristic->addDescriptor(new BLE2902());
 
     // Create Command Characteristic
-    pCommandCharacteristic
-        = pService->createCharacteristic(GATEWAY_CHAR_COMMAND_UUID, BLECharacteristic::PROPERTY_WRITE);
+    pCommandCharacteristic = pService->createCharacteristic(
+        GATEWAY_CHAR_COMMAND_UUID, 
+        BLECharacteristic::PROPERTY_WRITE
+    );
     pCommandCharacteristic->setCallbacks(new CommandCallbacks());
 
     // Start the service
     pService->start();
 
-    // Start advertising
+    // Configure advertising for PWA
     BLEAdvertising* pAdvertising = pServer->getAdvertising();
+    
+    // IMPORTANT: Add service UUID (this is what PWA scans for)
     pAdvertising->addServiceUUID(GATEWAY_SERVICE_UUID);
+    
+    // Set scan response
     pAdvertising->setScanResponse(true);
+    
+    // CRITICAL FOR PWA: Use standard advertising parameters
+    // Most PWAs expect these standard values
+    pAdvertising->setMinInterval(0x20);    // 25ms
+    pAdvertising->setMaxInterval(0x40);    // 50ms
+    
+    // Standard preferred values that work with most BLE scanners
     pAdvertising->setMinPreferred(0x06);
-    pAdvertising->setMinPreferred(0x12);
-
+    pAdvertising->setMaxPreferred(0x12);
+    
+    // Start advertising
     BLEDevice::startAdvertising();
 
-    Serial.println("🎯 BLE Gateway advertising for PWA");
-    Serial.print("Device Name: ");
+    Serial.println("\n🎯 BLE Gateway READY for PWA");
+    Serial.println("📡 Advertising with:");
+    Serial.print("  • Device Name: ");
     Serial.println(DEVICE_NAME);
+    Serial.print("  • Service UUID: ");
+    Serial.println(GATEWAY_SERVICE_UUID);
+    Serial.println("  • Advertising interval: 25-50ms");
+    Serial.println("  • Scan response: Enabled");
+    Serial.println("\n🔍 PWA should find this device!");
 }
 
 void setup()
@@ -477,6 +556,7 @@ void setup()
     Serial.println("ESP32 BLE Gateway - Score Forwarder");
     Serial.println("==========================================");
     Serial.println("Mode: Forwarding actual scores from senders");
+    Serial.println("BLE Power: MAXIMUM (+9 dBm)");
     Serial.println("Target senders:");
     for (const auto& target : targetSenders) {
         Serial.print("  • ");
@@ -484,10 +564,7 @@ void setup()
     }
     Serial.println("==========================================\n");
 
-    // Setup BLE Gateway for PWA
     setupBLEGateway();
-
-    // Initial scan for senders
     scanForSenders();
 }
 
@@ -505,11 +582,26 @@ void loop()
         sendDeviceListToPWA();
     }
 
-    // Periodic scan for senders (every 30 seconds)
+    // Periodic scan for senders (every 15 seconds)
     static unsigned long lastScanTime = 0;
-    if (millis() - lastScanTime >= 30000) {
+    if (millis() - lastScanTime >= 15000) {
         scanForSenders();
         lastScanTime = millis();
+    }
+
+    // Monitor and reconnect to disconnected senders
+    static unsigned long lastReconnectTime = 0;
+    if (millis() - lastReconnectTime >= 5000) { // Check every 5 seconds
+        for (auto& devicePair : senderDevices) {
+            if (!devicePair.second->connected) {
+                Serial.print("⚠️  Sender disconnected: ");
+                Serial.println(devicePair.first.c_str());
+                
+                // Try to reconnect after a delay
+                // You could add reconnection logic here
+            }
+        }
+        lastReconnectTime = millis();
     }
 
     delay(100);

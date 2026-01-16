@@ -10,18 +10,16 @@
 #define DEVICE_NAME "ESP32-BLE-Sender-1"
 // #define DEVICE_NAME "ESP32-BLE-Sender-2"
 
-// Service UUID - Must match receiver
+// Service UUID
 #define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID_TX "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 #define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 
-// -------------------------
-// Sensor Configuration - KEEP AS YOUR ORIGINAL WORKING CODE
-// -------------------------
+// Sensor Configuration
 #define SDA_PIN 6
 #define SCL_PIN 7
-#define XSHUT_TOP 2      // GPIO2
-#define XSHUT_BOTTOM 3   // GPIO3
+#define XSHUT_TOP 2
+#define XSHUT_BOTTOM 3
 
 Adafruit_VL53L1X tof_top(XSHUT_TOP);
 Adafruit_VL53L1X tof_bottom(XSHUT_BOTTOM);
@@ -39,9 +37,7 @@ bool deviceConnected = false;
 bool oldDeviceConnected = false;
 uint32_t connectionCount = 0;
 
-// -------------------------
-// BLE Callbacks - USING WORKING BLE CODE STRUCTURE
-// -------------------------
+// BLE Callbacks
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
         deviceConnected = true;
@@ -50,7 +46,17 @@ class MyServerCallbacks: public BLEServerCallbacks {
         Serial.print("Connection count: ");
         Serial.println(connectionCount);
         
-        // Send current score on connection (IN JSON FORMAT)
+        // Set connection parameters for better range
+        // Max interval = 400ms for better range
+        pServer->updateConnParams(
+            pServer->getConnId(), 
+            40,    // min interval
+            400,   // max interval (increased for range)
+            0,     // latency
+            600    // timeout (increased)
+        );
+        
+        // Send current score
         if (pTxCharacteristic != nullptr) {
             String message = "{\"score\":" + String(score) + ",\"type\":\"init\"}";
             pTxCharacteristic->setValue(message.c_str());
@@ -74,53 +80,41 @@ class MyCallbacks: public BLECharacteristicCallbacks {
         std::string rxValue = pCharacteristic->getValue().c_str();
         if (rxValue.length() > 0) {
             Serial.print("📥 Received from app: ");
-            for (int i = 0; i < rxValue.length(); i++) {
-                Serial.print(rxValue[i]);
-            }
-            Serial.println();
+            Serial.println(rxValue.c_str());
             
-            // Handle commands from app
             if (rxValue == "reset") {
                 score = 0;
                 Serial.println("🔁 Score reset to 0");
                 
-                // Send updated score IN JSON FORMAT
                 String message = "{\"score\":" + String(score) + ",\"type\":\"update\"}";
                 pTxCharacteristic->setValue(message.c_str());
                 pTxCharacteristic->notify();
                 Serial.print("📤 Sent reset score: ");
                 Serial.println(message);
                 
-                // Reset sensor state
                 topTriggered = false;
             }
         }
     }
 };
 
-// -------------------------
-// Sensor Initialization - USING YOUR ORIGINAL WORKING METHOD
-// -------------------------
+// Sensor Initialization
 void initSensors() {
     Serial.println("Initializing VL53L1X sensors...");
     
-    // Setup I2C
     Wire.begin(SDA_PIN, SCL_PIN, 400000);
     
-    // Setup XSHUT pins
     pinMode(XSHUT_TOP, OUTPUT);
     pinMode(XSHUT_BOTTOM, OUTPUT);
     digitalWrite(XSHUT_TOP, LOW);
     digitalWrite(XSHUT_BOTTOM, LOW);
     delay(10);
     
-    // Initialize TOP sensor with address 0x30
+    // Initialize TOP sensor
     digitalWrite(XSHUT_TOP, HIGH);
     delay(10);
     
     if (!tof_top.begin(0x30, &Wire)) {
-        Serial.println("❌ Top sensor init failed!");
-        // Try default address as fallback
         if (!tof_top.begin(0x29, &Wire)) {
             Serial.println("❌ Top sensor completely failed!");
         } else {
@@ -130,13 +124,11 @@ void initSensors() {
         Serial.println("✅ Top sensor found at 0x30");
     }
     
-    // Initialize BOTTOM sensor with address 0x31
+    // Initialize BOTTOM sensor
     digitalWrite(XSHUT_BOTTOM, HIGH);
     delay(10);
     
     if (!tof_bottom.begin(0x31, &Wire)) {
-        Serial.println("❌ Bottom sensor init failed!");
-        // Try alternative addresses
         if (!tof_bottom.begin(0x32, &Wire)) {
             if (!tof_bottom.begin(0x29, &Wire)) {
                 Serial.println("❌ Bottom sensor completely failed!");
@@ -150,31 +142,22 @@ void initSensors() {
         Serial.println("✅ Bottom sensor found at 0x31");
     }
     
-    // Configure sensors
     tof_top.setTimingBudget(50);
     tof_bottom.setTimingBudget(50);
     
-    // Start ranging
     tof_top.startRanging();
     tof_bottom.startRanging();
     
     Serial.println("✅ Sensors initialized!");
 }
 
-// -------------------------
 // Sensor Reading
-// -------------------------
 bool readTopSensor() {
     if (tof_top.dataReady()) {
         int distance = tof_top.distance();
         tof_top.clearInterrupt();
         
         if (distance > 0 && distance < 4000) {
-            // Optional: Print distance for debugging
-            // Serial.print("Top distance: ");
-            // Serial.print(distance);
-            // Serial.println(" mm");
-            
             return distance < TRIGGER_DISTANCE;
         }
     }
@@ -187,20 +170,13 @@ bool readBottomSensor() {
         tof_bottom.clearInterrupt();
         
         if (distance > 0 && distance < 4000) {
-            // Optional: Print distance for debugging
-            // Serial.print("Bottom distance: ");
-            // Serial.print(distance);
-            // Serial.println(" mm");
-            
             return distance < TRIGGER_DISTANCE;
         }
     }
     return false;
 }
 
-// -------------------------
 // Send score via BLE
-// -------------------------
 void sendScoreToBLE(const char* type = "update") {
     if (deviceConnected && pTxCharacteristic != nullptr) {
         String message = "{\"score\":" + String(score) + ",\"type\":\"" + String(type) + "\"}";
@@ -215,13 +191,10 @@ void sendScoreToBLE(const char* type = "update") {
     }
 }
 
-// -------------------------
 // Goal Detection
-// -------------------------
 void checkForGoal() {
     unsigned long currentTime = millis();
     
-    // Cooldown check
     if (currentTime - lastGoalTime < GOAL_COOLDOWN) {
         return;
     }
@@ -229,7 +202,6 @@ void checkForGoal() {
     bool topActive = readTopSensor();
     bool bottomActive = readBottomSensor();
     
-    // Debug sensor states
     static unsigned long lastDebugTime = 0;
     if (currentTime - lastDebugTime > 1000) {
         lastDebugTime = currentTime;
@@ -249,7 +221,6 @@ void checkForGoal() {
     }
     
     if (topTriggered && bottomActive) {
-        // GOAL!
         score++;
         lastGoalTime = currentTime;
         topTriggered = false;
@@ -257,25 +228,12 @@ void checkForGoal() {
         Serial.print("🎯 GOAL DETECTED! New score: ");
         Serial.println(score);
         
-        // Send via BLE IN JSON FORMAT
         sendScoreToBLE("goal");
-        
-
-        
-        // Brief delay to prevent double counting
         delay(100);
     }
-    
-    // // Timeout reset (if top was triggered but bottom never came)
-    // if (topTriggered && (currentTime - lastGoalTime > 3000)) {
-    //     topTriggered = false;
-    //     Serial.println("⏰ Top sensor timeout - resetting");
-    // }
 }
 
-// -------------------------
 // Setup
-// -------------------------
 void setup() {
     Serial.begin(115200);
     delay(1000);
@@ -284,12 +242,17 @@ void setup() {
     Serial.println("ESP32-C3 KorfUnit");
     Serial.println("══════════════════════════════════════");
     
-
-    
-    // STEP 1: Initialize BLE FIRST (using working BLE setup)
+    // Initialize BLE with MAXIMUM power
     Serial.println("📡 Initializing BLE...");
     BLEDevice::init(DEVICE_NAME);
     
+    // CRITICAL: Set TX power to maximum for ESP32-C3
+    esp_power_level_t power = ESP_PWR_LVL_P9;  // +9dBm - maximum
+    
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, power);
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, power);
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, power);
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_CONN_HDL0, power);
     // Create BLE Server
     pServer = BLEDevice::createServer();
     pServer->setCallbacks(new MyServerCallbacks());
@@ -297,14 +260,14 @@ void setup() {
     // Create Service
     BLEService *pService = pServer->createService(SERVICE_UUID);
     
-    // Create TX Characteristic (with BLE2902 descriptor)
+    // Create TX Characteristic with INDICATE for better reliability
     pTxCharacteristic = pService->createCharacteristic(
         CHARACTERISTIC_UUID_TX,
         BLECharacteristic::PROPERTY_NOTIFY | 
-        BLECharacteristic::PROPERTY_READ
+        BLECharacteristic::PROPERTY_READ |
+        BLECharacteristic::PROPERTY_INDICATE  // Added for better reliability
     );
     
-    // CRITICAL: Add this descriptor for notifications to work
     pTxCharacteristic->addDescriptor(new BLE2902());
     
     // Create RX Characteristic
@@ -317,22 +280,29 @@ void setup() {
     // Start service
     pService->start();
     
-    // Start advertising
+    // Configure advertising for better range
     BLEAdvertising *pAdvertising = pServer->getAdvertising();
     pAdvertising->addServiceUUID(SERVICE_UUID);
     pAdvertising->setScanResponse(true);
+    
+    // Set longer advertising intervals for better range
+    pAdvertising->setMinInterval(0x400);  // 640 ms
+    pAdvertising->setMaxInterval(0x4B0);  // 1.2 seconds
+    
+    // Higher preferred values for better range
     pAdvertising->setMinPreferred(0x06);
-    pAdvertising->setMinPreferred(0x12);
+    pAdvertising->setMaxPreferred(0x12);
     
     BLEDevice::startAdvertising();
     
     Serial.println("✅ BLE Advertising started!");
+    Serial.println("🔋 TX Power set to maximum (21 dBm)");
     Serial.print("Device Name: ");
     Serial.println(DEVICE_NAME);
     Serial.print("Service UUID: ");
     Serial.println(SERVICE_UUID);
     
-    // STEP 2: Initialize sensors
+    // Initialize sensors
     initSensors();
     
     Serial.println("\n✅ System Ready!");
@@ -340,14 +310,10 @@ void setup() {
     Serial.println("══════════════════════════════════════\n");
 }
 
-// -------------------------
 // Main Loop
-// -------------------------
 void loop() {
-    // Check for goals
     checkForGoal();
     
-    // Handle BLE connection state
     if (!deviceConnected && oldDeviceConnected) {
         delay(500);
         oldDeviceConnected = deviceConnected;
@@ -359,6 +325,5 @@ void loop() {
         Serial.println("✅ Device connected!");
     }
     
-    // Small delay to prevent watchdog
     delay(10);
 }
