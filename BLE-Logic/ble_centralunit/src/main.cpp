@@ -94,7 +94,7 @@ class GatewayServerCallbacks : public BLEServerCallbacks {
 class CommandCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* pCharacteristic)
     {
-        std::string command = pCharacteristic->getValue();
+        std::string command = pCharacteristic->getValue().c_str();;
 
         if (command.length() > 0) {
             Serial.print("📱 Command from PWA: ");
@@ -291,7 +291,7 @@ static void senderNotificationCallback(
 // Connect to a sender device
 void connectToSender(BLEAdvertisedDevice* device)
 {
-    std::string deviceName = device->getName();
+    std::string deviceName = device->getName().c_str();
 
     Serial.print("🔗 Connecting to sender: ");
     Serial.println(deviceName.c_str());
@@ -344,7 +344,7 @@ void connectToSender(BLEAdvertisedDevice* device)
         }
 
         // Read initial value
-        std::string value = pRemoteTX->readValue();
+        std::string value = pRemoteTX->readValue().c_str();
         if (!value.empty()) {
             sender->lastData = String(value.c_str());
             Serial.print("   Initial value: ");
@@ -378,19 +378,19 @@ void scanForSenders()
     pBLEScan->setInterval(100);
     pBLEScan->setWindow(99);
 
-    BLEScanResults foundDevices = pBLEScan->start(3, false); // 3 second scan
+    BLEScanResults* foundDevices = pBLEScan->start(3, false); // 3 second scan
 
     Serial.print("Found ");
-    Serial.print(foundDevices.getCount());
+    Serial.print(foundDevices->getCount());
     Serial.println(" total devices");
 
     int targetFound = 0;
 
-    for (int i = 0; i < foundDevices.getCount(); i++) {
-        BLEAdvertisedDevice device = foundDevices.getDevice(i);
+    for (int i = 0; i < foundDevices->getCount(); i++) {
+        BLEAdvertisedDevice device = foundDevices->getDevice(i);
 
         if (device.haveName()) {
-            std::string deviceName = device.getName();
+            std::string deviceName = device.getName().c_str();
 
             if (isTargetSender(deviceName)) {
                 targetFound++;
