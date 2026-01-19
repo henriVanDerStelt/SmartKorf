@@ -24,16 +24,17 @@ int oldAway = 0;
 BluetoothSerial SerialBT;      // only if you use BT classic
 BLECharacteristic* pScoreChar = nullptr;
 
-void scoreRNG() {
-  static uint32_t lastUpdate = 0;
-  uint32_t now = millis();
-
-  if (now - lastUpdate < 5000) return;
-  lastUpdate = now;
-
-  homeScore += random(0, 2);
-  awayScore += random(0, 2);
-
+void scoreChange(int score, int who) {
+ 
+  if (who == 1) { // home team
+    homeScore = score;
+  } else if (who == 2) { // away team
+    awayScore = score;
+  } else {
+    // unknown team, ignore
+    return;
+  }
+ 
   if (homeScore > 99) homeScore = 99;
   if (awayScore > 99) awayScore = 99;
 }
