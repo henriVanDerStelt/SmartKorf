@@ -1,0 +1,35 @@
+.head-to-head-section {
+    margin-top: 10px;
+}
+
+.head-to-head-records {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+}
+
+.head-to-head-record {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.head-to-head-record h5 {
+    padding: 0;
+    margin: 0px;
+    font-size: 1.1rem;
+}
+
+.head-to-head-record p {
+    padding: 0;
+    margin: 0px;
+    font-size: 0.9rem;
+}
+
+.head-to-head-record span {
+    font-weight: normal;
+    color: lightslategray;
+}

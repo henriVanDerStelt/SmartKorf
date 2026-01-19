@@ -1,0 +1,30 @@
+.stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    width: 100%;
+}
+
+.stat h3 {
+    font-size: 1.1rem;
+}
+
+.stat h4 {
+    font-weight: normal;
+    font-size: 0.9rem;
+}
+
+.stat h5 {
+    color: lightslategray;
+    font-size: 0.8rem;
+    font-weight: normal;
+}
+
+.stat-values {
+    width: 32%;
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: baseline;
+    gap: 10px;
+}

@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef } from "react";
 import "./timer.css";
 import { supabase } from "../../supabaseClient";
 import { useUser } from "@clerk/clerk-react";
-import { useEspData } from "../../Contexts/EspDataContext";
+import { useTime } from "../../Hooks/Commands";
 
 const TIMER_DURATION = 30; // time in minutes
 
 function Timer() {
   const { user } = useUser();
-  const { sendCommand } = useEspData();
+  const { start: sendStart, stop: sendStop, reset: sendReset } = useTime();
   const [timeLeft, setTimeLeft] = useState(TIMER_DURATION * 60 * 100);
   const [isRunning, setIsRunning] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -72,6 +72,7 @@ function Timer() {
         handleStart();
       } else {
         setIsRunning(false);
+        sendStop();
       }
     }
   };
@@ -79,6 +80,7 @@ function Timer() {
   const handleReset = () => {
     setIsRunning(false);
     setTimeLeft(TIMER_DURATION * 60 * 100);
+    sendReset();
   };
 
   const finishGame = async () => {
@@ -135,15 +137,8 @@ function Timer() {
       }
 
       setIsRunning(true);
+      sendStart();
     }
-  };
-
-  const sendTestCommand = () => {
-    sendCommand("test");
-  };
-
-  const sendHelloWorld = () => {
-    sendCommand("hello");
   };
 
   return (
@@ -161,12 +156,6 @@ function Timer() {
         </button>
         <button className="timer-button reset" onClick={handleReset}>
           Reset
-        </button>
-        <button className="timer-button" onClick={sendHelloWorld}>
-          Test
-        </button>
-        <button className="timer-button" onClick={sendTestCommand}>
-          Send Test
         </button>
       </div>
     </div>

@@ -1,0 +1,53 @@
+.recent-game-card {
+    display: flex;
+    align-items: baseline;
+    justify-content: baseline;
+    gap: 20px;
+}
+
+.recent-game-date {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.recent-game-date h5 {
+    margin: 0;
+}
+
+.recent-game-teams {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+}
+
+.recent-game-teams h4 {
+    margin: 0;
+    font-weight: normal;
+}
+
+.recent-game-teams h4.winning-team {
+    font-weight: 600;
+    color: var(--color-accent);
+}
+
+.recent-game-score {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+    font-family: monospace;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.score1 {
+    font-size: 1.1rem;
+}
+
+.recent-game-teams h3 {
+    margin: 0;
+    font-weight: bold;
+}
