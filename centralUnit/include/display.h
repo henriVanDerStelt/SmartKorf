@@ -8,16 +8,16 @@
 #define PANELS_NUMBER 2
 
 // ---- PINS (GPIO numbers) ----
-#define R1_PIN   23
-#define G1_PIN   19
-#define B1_PIN   18
-#define R2_PIN    5
-#define G2_PIN    4
-#define B2_PIN   16
+#define R1_PIN   2
+#define G1_PIN   5
+#define B1_PIN   16
+#define R2_PIN   23
+#define G2_PIN   19
+#define B2_PIN   18
 
-#define A_PIN    17
-#define B_PIN    21
-#define C_PIN    22
+#define A_PIN    4 
+#define B_PIN    17 //21
+#define C_PIN    0 //22
 #define D_PIN    26
 #define E_PIN    27   // needed for 1/32 scan
 

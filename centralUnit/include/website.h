@@ -26,7 +26,7 @@ extern BLECharacteristic* pScoreChar;
 uint32_t getRemainingTimerSeconds();
 
 void websiteSetup();
-void scoreRNG();
+void scoreChange(int score, int who);
 void sendScoreNew();
 
 void changeNames(String newHome, String newAway);
