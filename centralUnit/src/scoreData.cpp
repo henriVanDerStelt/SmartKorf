@@ -39,7 +39,7 @@ void scoreChange(int score, int who) {
   if (awayScore > 99) awayScore = 99;
 }
 
-void sendScoreNew(){
+void sendScoreNew(BLECharacteristic* pScoreChar) {
   static uint32_t lastUpdate = 0;
   uint32_t now = millis();
 

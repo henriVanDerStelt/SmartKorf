@@ -6,6 +6,19 @@
 #include <website.h>
 #include <ArduinoJson.h>
 
+std::map<std::string, std::string> teamToSender = {
+    {"HOME", "ESP32-BLE-Sender-1"},
+    {"AWAY", "ESP32-BLE-Sender-2"}
+};
+struct PendingScoreSync {
+  bool pending = false;
+  std::string senderName;
+  int score = 0;
+};
+
+volatile bool gSyncPending = false;   // simpele flag
+PendingScoreSync gSync;
+
 // Structure for connected sender devices
 struct SenderDevice {
     std::string name;
@@ -78,7 +91,56 @@ class GatewayServerCallbacks : public BLEServerCallbacks {
     }
 };
 
+// Stuur score sync commando naar sender
+bool syncScoreToSender(const std::string& senderName, int newScore)
+{
+    auto itDev = senderDevices.find(senderName);
+    if (itDev == senderDevices.end()) {
+        Serial.print("❌ Sender not connected: ");
+        Serial.println(senderName.c_str());
+        return false;
+    }
 
+    SenderDevice* sender = itDev->second;
+
+    if (!sender->connected || sender->rxCharacteristic == nullptr) {
+        Serial.print("❌ Sender not ready for commands: ");
+        Serial.println(senderName.c_str());
+        return false;
+    }
+
+    // Check write capability
+    bool canWrite     = sender->rxCharacteristic->canWrite();
+    bool canWriteNR   = sender->rxCharacteristic->canWriteNoResponse();
+
+    Serial.print("RX canWrite=");
+    Serial.print(canWrite);
+    Serial.print(" canWriteNoResp=");
+    Serial.println(canWriteNR);
+
+    String command = "{\"command\":\"set_score\",\"score\":" + String(newScore) + "}";
+    Serial.print("📤 Syncing score to ");
+    Serial.print(senderName.c_str());
+    Serial.print(": ");
+    Serial.println(command);
+
+    bool ok = false;
+
+    // Prefer no-response (safer / less blocking)
+    if (canWriteNR) {
+        ok = sender->rxCharacteristic->writeValue((uint8_t*)command.c_str(), command.length(), false);
+        sendScoreNew();
+    } else if (canWrite) {
+        // fallback with response (can still block if remote misbehaves)
+        ok = sender->rxCharacteristic->writeValue((uint8_t*)command.c_str(), command.length(), true);
+    } else {
+        Serial.println("❌ RX characteristic is not writable");
+        return false;
+    }
+
+    Serial.println(ok ? "✅ Score sync sent" : "❌ Failed to send score sync");
+    return ok;
+}
 
 // Callback for commands from PWA
 class CommandCallbacks : public BLECharacteristicCallbacks {
@@ -137,56 +199,75 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
       } else if (cmd == "SCORE") {
         JsonArray values = doc["Value"];
 
-        if (!values || values.size() != 2) {
+        if (!values || values.size() < 2) {
             Serial.println("SCORE requires Value[2]");
             return;
         }
 
-        String team = values[0].as<String>();
-        String op   = values[1].as<String>();
-        team.toUpperCase();
-        op.toUpperCase();
+        String teamStr = values[0].as<String>();
+        String opStr   = values[1].as<String>();
+        teamStr.toUpperCase();
+        opStr.toUpperCase();
 
         int* scorePtr = nullptr;
 
-        if (team == "HOME") {
+        if (teamStr == "HOME") {
             scorePtr = &homeScore;
-        }
-        else if (team == "AWAY") {
+        } else if (teamStr == "AWAY") {
             scorePtr = &awayScore;
-        }
-        else {
+        } else {
             Serial.println("Invalid team (must be HOME or AWAY)");
             return;
         }
 
-        if (op == "INCREMENT") {
+        if (opStr == "INCREMENT") {
             (*scorePtr)++;
-        }
-        else if (op == "DECREMENT") {
+        } else if (opStr == "DECREMENT") {
             (*scorePtr)--;
-        }
-        else {
+        } else if (opStr == "SET") {
+            if (values.size() >= 3) {
+                *scorePtr = values[2].as<int>();
+            } else {
+                Serial.println("SET requires Value[3]");
+                return;
+            }
+        } else {
             Serial.println("Invalid SCORE operation");
             return;
         }
 
-        // Clamp score (0–99)
+        // Clamp score (0–99)  ✅ constrain on the VALUE
         *scorePtr = constrain(*scorePtr, 0, 99);
 
         Serial.print("SCORE updated → ");
-        Serial.print(team);
+        Serial.print(teamStr);
         Serial.print(" = ");
         Serial.println(*scorePtr);
 
-        // Optional: push update
-        // sendScore();
+        // ---------- STUUR SCORE NAAR SENDER ----------
+        std::string teamKey = teamStr.c_str();
+        auto it = teamToSender.find(teamKey);
+        if (it != teamToSender.end()) {
+            const std::string& senderName = it->second;
+
+            Serial.print("🔁 Syncing score to sender: ");
+            Serial.println(senderName.c_str());
+
+            // pass INT value ✅
+            gSync.senderName = senderName;
+            gSync.score = *scorePtr;
+            gSync.pending = true;
+            gSyncPending = true;
+
+            Serial.println("Queued score sync (will send in loop)");
+        } else {
+            Serial.print("❌ No sender mapping found for team: ");
+            Serial.println(teamStr);
+        }
 
         return;
         }
     }
-
-
     // ---------- LEGACY STRING COMMANDS ----------
     if (msg == "get_devices") {
       sendDeviceListToPWA();
@@ -692,6 +773,17 @@ void handleBluetooth(){
     if (millis() - lastScanTime >= 30000) {
         scanForSenders();
         lastScanTime = millis();
+    }
+    if (gSyncPending && gSync.pending) {
+        gSyncPending = false;     // eerst flag omlaag (voorkomt spam)
+        gSync.pending = false;
+
+        Serial.print("🚀 Sending queued score sync to ");
+        Serial.print(gSync.senderName.c_str());
+        Serial.print(" score=");
+        Serial.println(gSync.score);
+
+        syncScoreToSender(gSync.senderName, gSync.score);
     }
 
     // delay(100);

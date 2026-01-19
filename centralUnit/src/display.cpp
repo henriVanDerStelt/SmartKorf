@@ -57,7 +57,7 @@ void scoreBoardSettings(){
   mxconfig.latch_blanking = 1; // the time between clocking data to the panel and then turning the LEDS 'on', 1 is default
   mxconfig.i2sspeed       = HUB75_I2S_CFG::HZ_15M; // (HZ_15M works best atm)
   mxconfig.clkphase       = true;      // or false depending on panel; default is true in newer versions
-  mxconfig.double_buff = true;   // can be used for syncing to avoid visual artefacts, but uses more RAM. use with flipdmabuffer(). Also breaks site, no ram?
+  mxconfig.double_buff = false;   // can be used for syncing to avoid visual artefacts, but uses more RAM. use with flipdmabuffer(). Also breaks site, no ram?
   mxconfig.min_refresh_rate = 120; // set to 120Hz minimum refresh rate (120 works best atm)
 
 }
