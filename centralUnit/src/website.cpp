@@ -12,6 +12,7 @@ struct SenderDevice {
     BLEAddress address;
     BLEClient* client;
     BLERemoteCharacteristic* txCharacteristic;
+    BLERemoteCharacteristic* rxCharacteristic;
     bool connected;
     int rssi;
     String lastData;
@@ -21,6 +22,7 @@ struct SenderDevice {
         : address(BLEAddress("00:00:00:00:00:00"))
         , client(nullptr)
         , txCharacteristic(nullptr)
+        , rxCharacteristic(nullptr)
         , connected(false)
         , rssi(0)
         , lastUpdate(0)
@@ -446,13 +448,20 @@ void connectToSender(BLEAdvertisedDevice* device)
     }
 
     Serial.println("TX characteristic found");
-
+    BLERemoteCharacteristic* pRemoteRX = pRemoteService->getCharacteristic(SENDER_CHAR_UUID_RX);
+    if (pRemoteRX == nullptr) {
+        Serial.println("RX characteristic not found");
+        pClient->disconnect();
+        delete pClient;
+        return;
+    }
     // Store device info
     SenderDevice* sender = new SenderDevice();
     sender->name = deviceName;
     sender->address = device->getAddress();
     sender->client = pClient;
     sender->txCharacteristic = pRemoteTX;
+    sender->rxCharacteristic = pRemoteRX;
     sender->connected = true;
     sender->rssi = device->getRSSI();
     sender->lastUpdate = millis();

@@ -53,7 +53,7 @@ void scoreBoardSettings(){
   ALS JE DEZE SETTINGS HIERONDER AANPAST KRIJG JE SCREENTEARING/RUIS!
   DUS: ADMIN SETTINGS, NIET AANPASSEN TENZIJ JE WEET WAT JE DOET!
   */
-  mxconfig.setPixelColorDepthBits(4); // 6 bits per color channel so 18 bits, lower if memory issues occur
+  mxconfig.setPixelColorDepthBits(3); // 6 bits per color channel so 18 bits, lower if memory issues occur
   mxconfig.latch_blanking = 1; // the time between clocking data to the panel and then turning the LEDS 'on', 1 is default
   mxconfig.i2sspeed       = HUB75_I2S_CFG::HZ_15M; // (HZ_15M works best atm)
   mxconfig.clkphase       = true;      // or false depending on panel; default is true in newer versions

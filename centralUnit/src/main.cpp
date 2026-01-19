@@ -14,7 +14,6 @@ void setup(){
 
 void loop(){
   handleBluetooth();
-  scoreRNG();
   sendScoreNew();
   renderScreen();
   // drawPNG("/monkey.png", 0, 0);
