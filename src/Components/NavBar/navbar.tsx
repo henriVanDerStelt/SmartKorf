@@ -7,8 +7,7 @@ import { useEspData } from "../../Contexts/EspDataContext";
 function NavBar() {
   const navigate = useNavigate();
   const { user, isLoaded } = useUser();
-  const { devices } = useEspData();
-  const hasConnectedDevices = devices.size > 0;
+  const { isConnected } = useEspData();
 
   return (
     <nav className="navbar-container">
@@ -17,10 +16,10 @@ function NavBar() {
       </h1>
 
       <ul className="navbar-links">
-        {hasConnectedDevices && (
+        {isConnected && (
           <li>
             <Link to="/ScoreBoard" className="scoreboard-link-live">
-              ScoreBoard
+              <span className="stip">•</span> ScoreBoard
             </Link>
           </li>
         )}

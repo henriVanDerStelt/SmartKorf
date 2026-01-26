@@ -10,6 +10,7 @@ function StatsSection() {
     <div className="section">
       <div className="stats-header">
         <UserButton
+          afterSignOutUrl="/SmartKorf"
           appearance={{
             elements: {
               userButtonAvatarBox: {

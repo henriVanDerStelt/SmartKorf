@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useEspData } from "../Contexts/EspDataContext";
 
 interface BleJsonData {
@@ -12,7 +12,7 @@ function UseBleJsonReceiver() {
   const [previousData, setPreviousData] = useState<Map<string, BleJsonData>>(
     new Map(),
   );
-  const [callbacks, setCallbacks] = useState<DataChangeCallback[]>([]);
+  const callbacksRef = useRef<DataChangeCallback[]>([]);
 
   // Watch for changes in devices and trigger events
   useEffect(() => {
@@ -32,7 +32,7 @@ function UseBleJsonReceiver() {
         JSON.stringify(prevDeviceData) !== JSON.stringify(currentData)
       ) {
         // Trigger alle callbacks met nieuwe data
-        callbacks.forEach((callback) => {
+        callbacksRef.current.forEach((callback) => {
           callback(currentData, deviceName);
         });
 
@@ -44,15 +44,17 @@ function UseBleJsonReceiver() {
         });
       }
     });
-  }, [devices, callbacks, previousData]);
+  }, [devices]);
 
   // Subscribe functie voor callbacks
   const subscribe = useCallback((callback: DataChangeCallback) => {
-    setCallbacks((prev) => [...prev, callback]);
+    callbacksRef.current = [...callbacksRef.current, callback];
 
     // Return unsubscribe functie
     return () => {
-      setCallbacks((prev) => prev.filter((cb) => cb !== callback));
+      callbacksRef.current = callbacksRef.current.filter(
+        (cb) => cb !== callback,
+      );
     };
   }, []);
 

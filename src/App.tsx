@@ -21,7 +21,7 @@ function App() {
     | undefined;
   if (!clerkKey) {
     throw new Error(
-      "Missing REACT_APP_CLERK_PUBLISHABLE_KEY. Add it to a .env file at the project root and restart `npm start`."
+      "Missing REACT_APP_CLERK_PUBLISHABLE_KEY. Add it to a .env file at the project root and restart `npm start`.",
     );
   }
   console.log("CLERK KEY:", clerkKey ? "[set]" : "[missing]");

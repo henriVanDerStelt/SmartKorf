@@ -15,14 +15,64 @@ function ScoreBoard() {
   const [timeLeft, setTimeLeft] = useState(TIMER_DURATION * 60 * 100);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [currentGameId, setCurrentGameId] = useState<string | null>(null);
+  const [homeScore, setHomeScore] = useState(0);
+  const [awayScore, setAwayScore] = useState(0);
+
+  // Sync met CentralUnit data
+  useEffect(() => {
+    devices.forEach((device) => {
+      if (device.name === "CentralUnit") {
+        try {
+          // Log raw payload received from CentralUnit
+          console.log("[CentralUnit] payload received:", device.data);
+          const parsedData = JSON.parse(device.data);
+          // Log parsed object for easier debugging
+          console.log("[CentralUnit] parsed data:", parsedData);
+
+          // Sync Score
+          if (parsedData.Score && Array.isArray(parsedData.Score)) {
+            const [centralHome, centralAway] = parsedData.Score;
+            if (homeScore !== centralHome) {
+              console.log(`Syncing home score: ${homeScore} -> ${centralHome}`);
+              setHomeScore(centralHome);
+            }
+            if (awayScore !== centralAway) {
+              console.log(`Syncing away score: ${awayScore} -> ${centralAway}`);
+              setAwayScore(centralAway);
+            }
+          }
+
+          // Sync Time (convert seconds to centiseconds)
+          if (parsedData.Time !== undefined) {
+            const centralTime = parsedData.Time * 100; // Convert to centiseconds
+            const timeDiff = Math.abs(timeLeft - centralTime);
+            // Only sync if difference is more than 1 second (100 centiseconds)
+            if (timeDiff > 100) {
+              console.log(`Syncing time: ${timeLeft} -> ${centralTime}`);
+              setTimeLeft(centralTime);
+            }
+          }
+        } catch (error) {
+          // Not JSON or not CentralUnit data, ignore
+          console.warn(
+            "[CentralUnit] failed to parse payload:",
+            device.data,
+            error,
+          );
+        }
+      }
+    });
+  }, [devices, homeScore, awayScore, timeLeft]);
 
   // Get data from specific devices (assuming first device is home, second is away)
   const homeDevice = Array.from(devices.values())[0];
   const awayDevice = Array.from(devices.values())[1];
 
-  // Parse the data from devices
-  const homeData = homeDevice ? parseInt(homeDevice.data) || 0 : 0;
-  const awayData = awayDevice ? parseInt(awayDevice.data) || 0 : 0;
+  // Use synced scores or fallback to device data
+  const homeData =
+    homeScore > 0 ? homeScore : homeDevice ? parseInt(homeDevice.data) || 0 : 0;
+  const awayData =
+    awayScore > 0 ? awayScore : awayDevice ? parseInt(awayDevice.data) || 0 : 0;
 
   const updateTeamName = async (team: "home" | "away", name: string) => {
     try {

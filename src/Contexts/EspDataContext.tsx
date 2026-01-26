@@ -100,21 +100,95 @@ export const EspDataProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Attempt to parse gateway payloads even if they are poorly formatted
+  const safeParseGatewayPayload = (
+    payload: string,
+  ):
+    | Array<GatewayMessage | DeviceData>
+    | GatewayMessage
+    | DeviceData[]
+    | null => {
+    try {
+      // First try regular JSON
+      return JSON.parse(payload);
+    } catch (e1) {
+      // Fallback: many gateways send arrays of single-quoted JSON strings
+      // Example: ["{'sender':'CentralUnit','data':'{"Score":[2,4]}'}", ...]
+      try {
+        // Replace single quotes with double quotes for JSON validity
+        const normalized = payload.replace(/'/g, '"');
+        const outer = JSON.parse(normalized);
+        if (
+          Array.isArray(outer) &&
+          outer.every((el: any) => typeof el === "string")
+        ) {
+          // Each element is a JSON string; parse each into an object
+          const parsedInner = outer
+            .map((s: string) => {
+              try {
+                return JSON.parse(s);
+              } catch (e2) {
+                return null;
+              }
+            })
+            .filter((x) => x !== null) as Array<GatewayMessage | DeviceData>;
+          return parsedInner;
+        }
+        // If outer was not an array of strings, return it as-is
+        return outer;
+      } catch (e2) {
+        // Fallback: try to extract inner JSON if payload is quoted JSON
+        try {
+          const trimmed = payload.trim();
+          if (
+            (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+            (trimmed.startsWith("'") && trimmed.endsWith("'"))
+          ) {
+            const inner = trimmed.slice(1, -1);
+            return JSON.parse(inner);
+          }
+        } catch (e3) {
+          // give up
+        }
+        addLog(`safeParse failed: ${String(e1)} | ${String(e2)}`);
+        return null;
+      }
+    }
+  };
+
   // Handle incoming data from gateway
   const handleGatewayData = (data: string) => {
     try {
-      // First, try to parse the main JSON
-      const jsonData = JSON.parse(data) as GatewayMessage | DeviceData[];
+      // First, try to parse the main JSON (robustly)
+      const jsonData = safeParseGatewayPayload(data) as
+        | GatewayMessage
+        | DeviceData[]
+        | Array<GatewayMessage | DeviceData>
+        | null;
+
+      if (jsonData === null) {
+        throw new Error("Failed to parse gateway payload");
+      }
 
       if (Array.isArray(jsonData)) {
         // Device list received - parse each device's data
         const newDevices = new Map<string, DeviceData>();
-        jsonData.forEach((device: DeviceData) => {
-          // Parse nested JSON in data field
-          const parsedData = parseNestedJsonData(device.data);
-          newDevices.set(device.name, {
-            ...device,
+        jsonData.forEach((item: any) => {
+          // Normalize shape: handle both DeviceData and GatewayMessage
+          const deviceName = item.name || item.sender || "Unknown";
+          const rssi = item.rssi ?? 0;
+          const connected = true;
+          const rawData = item.data ?? item.value ?? "";
+          const parsedData =
+            typeof rawData === "string"
+              ? parseNestedJsonData(rawData)
+              : parseNestedJsonData(JSON.stringify(rawData));
+
+          newDevices.set(deviceName, {
+            name: deviceName,
             data: parsedData,
+            rssi,
+            connected,
           });
         });
         setDevices(newDevices);
@@ -124,7 +198,7 @@ export const EspDataProvider = ({ children }: { children: ReactNode }) => {
         const deviceName = jsonData.sender;
 
         // Parse nested JSON in data field
-        const parsedData = parseNestedJsonData(jsonData.data);
+        const parsedData = parseNestedJsonData(jsonData.data as string);
 
         const deviceData = {
           name: deviceName,
@@ -193,26 +267,25 @@ export const EspDataProvider = ({ children }: { children: ReactNode }) => {
       serverRef.current = server;
 
       addLog("Getting service...");
-      const service = await serverRef.current.getPrimaryService(
-        GATEWAY_SERVICE_UUID
-      );
+      const service =
+        await serverRef.current.getPrimaryService(GATEWAY_SERVICE_UUID);
 
       addLog("Getting characteristics...");
       // Get data characteristic
       const dataCharacteristic = await service.getCharacteristic(
-        GATEWAY_CHAR_DATA_UUID
+        GATEWAY_CHAR_DATA_UUID,
       );
       dataCharacteristicRef.current = dataCharacteristic;
 
       // Get status characteristic
       const statusCharacteristic = await service.getCharacteristic(
-        GATEWAY_CHAR_STATUS_UUID
+        GATEWAY_CHAR_STATUS_UUID,
       );
       statusCharacteristicRef.current = statusCharacteristic;
 
       // Get command characteristic
       const commandCharacteristic = await service.getCharacteristic(
-        GATEWAY_CHAR_COMMAND_UUID
+        GATEWAY_CHAR_COMMAND_UUID,
       );
       commandCharacteristicRef.current = commandCharacteristic;
 
@@ -227,7 +300,7 @@ export const EspDataProvider = ({ children }: { children: ReactNode }) => {
           } catch (err) {
             addLog(`Error processing notification: ${err}`);
           }
-        }
+        },
       );
 
       // Subscribe to status notifications
@@ -283,7 +356,7 @@ export const EspDataProvider = ({ children }: { children: ReactNode }) => {
     try {
       const encoder = new TextEncoder();
       await commandCharacteristicRef.current.writeValue(
-        encoder.encode("get_devices")
+        encoder.encode("get_devices"),
       );
       addLog("Requested device list from gateway");
     } catch (err) {
@@ -301,7 +374,7 @@ export const EspDataProvider = ({ children }: { children: ReactNode }) => {
     try {
       const encoder = new TextEncoder();
       await commandCharacteristicRef.current.writeValue(
-        encoder.encode(command)
+        encoder.encode(command),
       );
       addLog(`Command sent: ${command}`);
     } catch (err) {
@@ -330,6 +403,7 @@ export const EspDataProvider = ({ children }: { children: ReactNode }) => {
 
 export const useEspData = () => {
   const context = useContext(EspDataContext);
+  console.log("EspDataContext:", context);
   if (!context) {
     throw new Error("useEspData must be used within EspDataProvider");
   }

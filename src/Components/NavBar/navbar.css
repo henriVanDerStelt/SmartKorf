@@ -75,23 +75,26 @@
   box-shadow: 0 4px 12px rgba(0, 113, 227, 0.22);
 }
 
+.stip {
+  animation: pulsateGreenWhite 3s ease-in-out infinite;
+}
+
 /* ScoreBoard live pulsating animation */
-@keyframes pulsateGreenBlack {
+@keyframes pulsateGreenWhite {
   0% {
-    color: #00ff00;
-    text-shadow: 0 0 8px #00ff00;
+    color: #017001;
+    text-shadow: 0 0 10px #02cf02bb;
   }
   50% {
-    color: #000000;
+    color: White;
     text-shadow: 0 0 0px transparent;
   }
   100% {
-    color: #00ff00;
-    text-shadow: 0 0 8px #00ff00;
+    color: #017001;
+    text-shadow: 0 0 10px #02cf02bb;
   }
 }
 
 .scoreboard-link-live {
-  animation: pulsateGreenBlack 1.5s ease-in-out infinite;
   font-weight: var(--font-weight-bold);
 }
