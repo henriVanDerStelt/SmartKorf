@@ -74,3 +74,24 @@
   transform: translateY(0);
   box-shadow: 0 4px 12px rgba(0, 113, 227, 0.22);
 }
+
+/* ScoreBoard live pulsating animation */
+@keyframes pulsateGreenBlack {
+  0% {
+    color: #00ff00;
+    text-shadow: 0 0 8px #00ff00;
+  }
+  50% {
+    color: #000000;
+    text-shadow: 0 0 0px transparent;
+  }
+  100% {
+    color: #00ff00;
+    text-shadow: 0 0 8px #00ff00;
+  }
+}
+
+.scoreboard-link-live {
+  animation: pulsateGreenBlack 1.5s ease-in-out infinite;
+  font-weight: var(--font-weight-bold);
+}

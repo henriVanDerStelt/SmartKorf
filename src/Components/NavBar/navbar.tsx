@@ -2,10 +2,13 @@ import React from "react";
 import "./navbar.css";
 import { Link, useNavigate } from "react-router-dom";
 import { UserButton, useUser } from "@clerk/clerk-react";
+import { useEspData } from "../../Contexts/EspDataContext";
 
 function NavBar() {
   const navigate = useNavigate();
   const { user, isLoaded } = useUser();
+  const { devices } = useEspData();
+  const hasConnectedDevices = devices.size > 0;
 
   return (
     <nav className="navbar-container">
@@ -14,6 +17,13 @@ function NavBar() {
       </h1>
 
       <ul className="navbar-links">
+        {hasConnectedDevices && (
+          <li>
+            <Link to="/ScoreBoard" className="scoreboard-link-live">
+              ScoreBoard
+            </Link>
+          </li>
+        )}
         <li>
           <Link to="/">Home</Link>
         </li>

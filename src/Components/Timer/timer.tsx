@@ -6,15 +6,28 @@ import { useTime } from "../../Hooks/Commands";
 
 const TIMER_DURATION = 30; // time in minutes
 
-function Timer() {
+interface TimerProps {
+  timeLeft: number;
+  setTimeLeft: (time: number) => void;
+  isRunning: boolean;
+  setIsRunning: (running: boolean) => void;
+  currentGameId: string | null;
+  setCurrentGameId: (id: string | null) => void;
+}
+
+function Timer({
+  timeLeft,
+  setTimeLeft,
+  isRunning,
+  setIsRunning,
+  currentGameId,
+  setCurrentGameId,
+}: TimerProps) {
   const { user } = useUser();
   const { start: sendStart, stop: sendStop, reset: sendReset } = useTime();
-  const [timeLeft, setTimeLeft] = useState(TIMER_DURATION * 60 * 100);
-  const [isRunning, setIsRunning] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const pausedTimeRef = useRef<number>(TIMER_DURATION * 60 * 100);
-  const [currentGameId, setCurrentGameId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isRunning && timeLeft > 0) {

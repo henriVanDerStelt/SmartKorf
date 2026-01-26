@@ -3,12 +3,18 @@ import "./scoreboard.css";
 import ScoreCounter from "../../Components/ScoreCounter/scorecounter";
 import Timer from "../../Components/Timer/timer";
 import { useEspData } from "../../Contexts/EspDataContext";
+import { useCommandReceiver } from "../../Hooks/useCommandReceiver";
 import { supabase } from "../../supabaseClient";
+
+const TIMER_DURATION = 30; // time in minutes
 
 function ScoreBoard() {
   const { devices } = useEspData();
   const [homeTeamName, setHomeTeamName] = useState("Home");
   const [awayTeamName, setAwayTeamName] = useState("Away");
+  const [timeLeft, setTimeLeft] = useState(TIMER_DURATION * 60 * 100);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [currentGameId, setCurrentGameId] = useState<string | null>(null);
 
   // Get data from specific devices (assuming first device is home, second is away)
   const homeDevice = Array.from(devices.values())[0];
@@ -37,6 +43,31 @@ function ScoreBoard() {
       console.error(e);
     }
   };
+
+  // Verwerk inkomende commands
+  useCommandReceiver({
+    onChangeNames: (homeTeam, awayTeam) => {
+      setHomeTeamName(homeTeam);
+      setAwayTeamName(awayTeam);
+      updateTeamName("home", homeTeam);
+      updateTeamName("away", awayTeam);
+    },
+    onScoreCommand: (teamName, action) => {
+      console.log(`Score command received: ${teamName} - ${action}`);
+      // Score updates worden automatisch verwerkt via BLE in ScoreCounter
+    },
+    onTimeCommand: (action) => {
+      console.log("Time command received:", action);
+      if (action === "START") {
+        setIsTimerRunning(true);
+      } else if (action === "STOP") {
+        setIsTimerRunning(false);
+      } else if (action === "RESET") {
+        setIsTimerRunning(false);
+        setTimeLeft(TIMER_DURATION * 60 * 100);
+      }
+    },
+  });
 
   const handleHomeNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const name = e.target.value;
@@ -90,7 +121,14 @@ function ScoreBoard() {
       </div>
 
       <div className="time-container">
-        <Timer />
+        <Timer
+          timeLeft={timeLeft}
+          setTimeLeft={setTimeLeft}
+          isRunning={isTimerRunning}
+          setIsRunning={setIsTimerRunning}
+          currentGameId={currentGameId}
+          setCurrentGameId={setCurrentGameId}
+        />
       </div>
     </div>
   );

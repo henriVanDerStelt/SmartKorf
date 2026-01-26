@@ -14,7 +14,7 @@ function GamesSection() {
       <div className="next-game">
         <div className="next-game-title">
           <h4>Next game:</h4>
-          <h3>09-01-2026, 13:00</h3>
+          <h3>09-02-2026, 13:00</h3>
         </div>
         <div className="teams">
           <TeamCard

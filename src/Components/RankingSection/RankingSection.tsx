@@ -6,7 +6,7 @@ import RankTable from "./RankTable";
 function RankingSection() {
   return (
     <div className="section">
-      <h2>Ranking Section</h2>
+      <h2>Ranking</h2>
       <RankTable
         headers={["Place", "Team", "G", "+", "-", "pt"]}
         data={[

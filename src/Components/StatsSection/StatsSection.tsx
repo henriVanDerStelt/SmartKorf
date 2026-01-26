@@ -1,5 +1,6 @@
 import "./StatsSection.css";
 import React from "react";
+import { UserButton, useUser } from "@clerk/clerk-react";
 
 import Stat from "./Stat";
 import SecondaryStat from "./SecondaryStat";
@@ -8,8 +9,20 @@ function StatsSection() {
   return (
     <div className="section">
       <div className="stats-header">
-        <h2>PKC</h2>
-        <h3>1</h3>
+        <UserButton
+          appearance={{
+            elements: {
+              userButtonAvatarBox: {
+                width: "56px",
+                height: "56px",
+                padding: "0",
+                margin: "0",
+              },
+            },
+          }}
+        />
+        <h4>PKC</h4>
+        <h4>1</h4>
       </div>
       <div className="stats-minor-section games-played">
         <Stat title="Games Played" value={12} />
