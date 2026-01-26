@@ -1,17 +1,17 @@
 {
   "files": {
     "main.css": "/SmartKorf/static/css/main.7ad89bd4.css",
-    "main.js": "/SmartKorf/static/js/main.ec737aac.js",
+    "main.js": "/SmartKorf/static/js/main.0c7c39ec.js",
     "static/js/453.83ee6779.chunk.js": "/SmartKorf/static/js/453.83ee6779.chunk.js",
     "static/media/image.png": "/SmartKorf/static/media/image.cca9685c0f51909295ff.png",
     "static/media/angry_face.png": "/SmartKorf/static/media/angry_face.fe37aa13abea47ed2c72.png",
     "index.html": "/SmartKorf/index.html",
     "main.7ad89bd4.css.map": "/SmartKorf/static/css/main.7ad89bd4.css.map",
-    "main.ec737aac.js.map": "/SmartKorf/static/js/main.ec737aac.js.map",
+    "main.0c7c39ec.js.map": "/SmartKorf/static/js/main.0c7c39ec.js.map",
     "453.83ee6779.chunk.js.map": "/SmartKorf/static/js/453.83ee6779.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.7ad89bd4.css",
-    "static/js/main.ec737aac.js"
+    "static/js/main.0c7c39ec.js"
   ]
 }
