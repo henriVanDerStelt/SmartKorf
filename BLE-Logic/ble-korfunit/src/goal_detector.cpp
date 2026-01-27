@@ -1,16 +1,24 @@
 #include "goal_detector.h"
 #include "ble_handler.h"
 
-// Sensor objects
+// Sensor objects - only create if sensors are enabled
+#ifdef USE_SENSORS
 static Adafruit_VL53L1X tof_top(XSHUT_TOP);
 static Adafruit_VL53L1X tof_bottom(XSHUT_BOTTOM);
+#else
+// Dummy sensor objects or pointers
+static void* tof_top = nullptr;
+static void* tof_bottom = nullptr;
+#endif
 
 // Goal detection state
 static bool topTriggered = false;
 static unsigned long lastGoalTime = 0;
 static unsigned long lastDebugTime = 0;
+static bool sensorsEnabled = false;
 
 void setupSensors() {
+    #ifdef USE_SENSORS
     Serial.println("Initializing VL53L1X sensors...");
     
     Wire.begin(SDA_PIN, SCL_PIN, 400000);
@@ -57,9 +65,16 @@ void setupSensors() {
     tof_top.startRanging();
     tof_bottom.startRanging();
     
+    sensorsEnabled = true;
     Serial.println("✅ Sensors initialized!");
+    #else
+    Serial.println("⚠️ Sensor support disabled at compile time");
+    sensorsEnabled = false;
+    #endif
 }
 
+// Safe sensor reading functions
+#ifdef USE_SENSORS
 static bool readTopSensor() {
     if (tof_top.dataReady()) {
         int distance = tof_top.distance();
@@ -83,8 +98,18 @@ static bool readBottomSensor() {
     }
     return false;
 }
+#else
+// Dummy implementations when sensors disabled
+static bool readTopSensor() { return false; }
+static bool readBottomSensor() { return false; }
+#endif
 
 void checkForGoal() {
+    // If sensors are not enabled, don't try to detect goals
+    if (!sensorsEnabled) {
+        return;
+    }
+    
     unsigned long currentTime = millis();
     
     // Check goal cooldown
@@ -98,6 +123,7 @@ void checkForGoal() {
     // Debug output every second
     if (currentTime - lastDebugTime > 1000) {
         lastDebugTime = currentTime;
+        #ifdef USE_SENSORS
         if (tof_top.dataReady() && tof_bottom.dataReady()) {
             Serial.print("📊 Sensors active - Top triggered: ");
             Serial.print(topTriggered ? "YES" : "NO");
@@ -106,6 +132,9 @@ void checkForGoal() {
             Serial.print(", Bottom active: ");
             Serial.println(bottomActive ? "YES" : "NO");
         }
+        #else
+        Serial.println("📊 Sensor simulation mode");
+        #endif
     }
     
     // Goal detection logic
@@ -129,24 +158,28 @@ void checkForGoal() {
 }
 
 void updateScore(int newScore) {
-    // Update score in BLE handler
     setScore(newScore);
 }
 
 int getCurrentScore() {
-    extern int score; // Access score from ble_handler.cpp
     return score;
 }
 
 bool isTopSensorActive() {
+    if (!sensorsEnabled) return false;
     return readTopSensor();
 }
 
 bool isBottomSensorActive() {
+    if (!sensorsEnabled) return false;
     return readBottomSensor();
 }
 
 void resetGoalDetection() {
     topTriggered = false;
     lastGoalTime = 0;
+}
+
+bool areSensorsEnabled() {
+    return sensorsEnabled;
 }

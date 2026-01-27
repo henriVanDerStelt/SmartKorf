@@ -4,8 +4,8 @@
 #include <Arduino.h>
 
 // Constants shared across modules
-#define DEVICE_NAME "ESP32-BLE-Sender-2"
-// #define DEVICE_NAME "ESP32-BLE-Sender-1"
+// #define DEVICE_NAME "ESP32-BLE-Sender-2"
+#define DEVICE_NAME "ESP32-BLE-Sender-1"
 #define SDA_PIN 6
 #define SCL_PIN 7
 #define XSHUT_TOP 2

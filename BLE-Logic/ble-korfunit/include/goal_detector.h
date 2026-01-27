@@ -2,8 +2,12 @@
 #define GOAL_DETECTOR_H
 
 #include <Wire.h>
-#include <Adafruit_VL53L1X.h>
 #include "korfunit.h"
+
+// Conditional sensor support
+#ifdef USE_SENSORS
+#include <Adafruit_VL53L1X.h>
+#endif
 
 // Goal detection functions
 void setupSensors();
