@@ -26,14 +26,6 @@ interface GatewayMessage {
   timestamp?: number;
 }
 
-interface CentralUnitScoreData {
-  From: string;
-  Time: number;
-  Score: number[];
-  Accuracy: number[];
-  GoalAttempt: number[];
-}
-
 interface EspDataContextType {
   devices: Map<string, DeviceData>;
   isConnected: boolean;
@@ -86,18 +78,9 @@ export const EspDataProvider = ({ children }: { children: ReactNode }) => {
       // Try to parse the data as JSON
       const parsed = JSON.parse(data);
 
-      // Check if it matches the CentralUnit format
-      if (parsed && typeof parsed === "object") {
-        // Check if it has the CentralUnit structure
-        if ("From" in parsed && "Score" in parsed) {
-          // Return the entire JSON string for further processing
-          return JSON.stringify(parsed);
-        }
-
-        // If it has a score field, extract just the score
-        if ("score" in parsed) {
-          return parsed.score.toString();
-        }
+      // If it has a score field, extract just the score
+      if (parsed && typeof parsed === "object" && "score" in parsed) {
+        return parsed.score.toString();
       }
 
       // If it's just a number, return it
@@ -176,27 +159,46 @@ export const EspDataProvider = ({ children }: { children: ReactNode }) => {
   // Handle incoming data from gateway
   const handleGatewayData = (data: string) => {
     try {
-      // First, try to parse the main JSON
-      const jsonData = JSON.parse(data) as GatewayMessage | DeviceData[] | CentralUnitScoreData;
+      // First, try to parse the main JSON (robustly)
+      const jsonData = safeParseGatewayPayload(data) as
+        | GatewayMessage
+        | DeviceData[]
+        | Array<GatewayMessage | DeviceData>
+        | null;
+
+      if (jsonData === null) {
+        throw new Error("Failed to parse gateway payload");
+      }
 
       if (Array.isArray(jsonData)) {
         // Device list received - parse each device's data
         const newDevices = new Map<string, DeviceData>();
-        jsonData.forEach((device: DeviceData) => {
-          // Parse nested JSON in data field
-          const parsedData = parseNestedJsonData(device.data);
-          newDevices.set(device.name, {
-            ...device,
+        jsonData.forEach((item: any) => {
+          // Normalize shape: handle both DeviceData and GatewayMessage
+          const deviceName = item.name || item.sender || "Unknown";
+          const rssi = item.rssi ?? 0;
+          const connected = true;
+          const rawData = item.data ?? item.value ?? "";
+          const parsedData =
+            typeof rawData === "string"
+              ? parseNestedJsonData(rawData)
+              : parseNestedJsonData(JSON.stringify(rawData));
+
+          newDevices.set(deviceName, {
+            name: deviceName,
             data: parsedData,
+            rssi,
+            connected,
           });
         });
         setDevices(newDevices);
         addLog(`Received device list (${jsonData.length} devices)`);
       } else if (jsonData.sender && jsonData.data !== undefined) {
-        // Single device data received (old format)
+        // Single device data received
         const deviceName = jsonData.sender;
+
         // Parse nested JSON in data field
-        const parsedData = parseNestedJsonData(jsonData.data);
+        const parsedData = parseNestedJsonData(jsonData.data as string);
 
         const deviceData = {
           name: deviceName,
@@ -212,25 +214,6 @@ export const EspDataProvider = ({ children }: { children: ReactNode }) => {
         });
 
         addLog(`Data from ${deviceName}: ${parsedData}`);
-      } else if ("From" in jsonData && "Score" in jsonData) {
-        // CentralUnit data received
-        const deviceName = jsonData.From;
-
-        // Store the full JSON string
-        const deviceData = {
-          name: deviceName,
-          data: JSON.stringify(jsonData),
-          rssi: 0, // No RSSI in this format
-          connected: true,
-        };
-
-        setDevices((prev) => {
-          const newDevices = new Map(prev);
-          newDevices.set(deviceName, deviceData);
-          return newDevices;
-        });
-
-        addLog(`CentralUnit data from ${deviceName}: ${jsonData.Score.length} scores`);
       }
     } catch (error) {
       addLog(`Error parsing data: ${error}. Raw data: ${data}`);
@@ -238,6 +221,7 @@ export const EspDataProvider = ({ children }: { children: ReactNode }) => {
       // Try to handle as raw score data (just a number)
       const num = parseFloat(data);
       if (!isNaN(num)) {
+        // This might be a raw score from a sender
         const deviceData = {
           name: "Unknown",
           data: num.toString(),
