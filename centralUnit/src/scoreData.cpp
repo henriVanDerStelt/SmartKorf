@@ -21,8 +21,6 @@ int awayScore = 0;
 int oldHome = 0;
 int oldAway = 0;
 
-BluetoothSerial SerialBT;      // only if you use BT classic
-BLECharacteristic* pScoreChar = nullptr;
 
 void scoreChange(int score, int who) {
  
@@ -39,32 +37,23 @@ void scoreChange(int score, int who) {
   if (awayScore > 99) awayScore = 99;
 }
 
-void sendScoreNew() {
+
+// Website.cpp will handle the actual BLE sending
+void sendScore() {
   static uint32_t lastUpdate = 0;
   uint32_t now = millis();
 
   if (oldHome == homeScore && oldAway == awayScore) return;
-  lastUpdate = now;
-  uint32_t matchTime = getRemainingTimerSeconds();
-  String jsonData =
-    "{"
-    "\"From\":\"CentralUnit\","
-    "\"Time\":" + String(matchTime) + ","
-    "\"Score\":[" + String(homeScore) + "," + String(awayScore) + "],"
-    "\"Accuracy\":[70,65],"
-    "\"GoalAttempt\":[54,48]"
-    "}";
-
-    if (pScoreChar) {
-    // NimBLE: safest is explicit bytes + length
-    pScoreChar->setValue((uint8_t*)jsonData.c_str(), jsonData.length());
-    pScoreChar->notify(true);   // true = notify all subscribed clients (works fine even with 1)
-  }
-
-  Serial.print("ScoreBoard data sent: ");
-  Serial.println(jsonData);
+  
+  // Just print to serial, website.cpp will handle BLE
+  Serial.print("Score changed: ");
+  Serial.print(homeScore);
+  Serial.print(" - ");
+  Serial.println(awayScore);
+  
   oldHome = homeScore;
   oldAway = awayScore;
+  sendScoreNew();
 }
 
 // ---- GAME TIMER (30 min) ----

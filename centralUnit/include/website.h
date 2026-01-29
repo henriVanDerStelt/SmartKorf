@@ -2,7 +2,7 @@
 #define WEBSITE_H
 
 #include <BLECharacteristic.h>
-#include <BluetoothSerial.h>   // <-- REQUIRED so extern BluetoothSerial works
+#include <Arduino.h>
 
 // BLE Configuration
 #define DEVICE_NAME "ESP32-BLE-Gateway"
@@ -18,26 +18,27 @@
 #define GATEWAY_CHAR_STATUS_UUID "32345678-1234-1234-1234-123456789abc"
 #define GATEWAY_CHAR_COMMAND_UUID "42345678-1234-1234-1234-123456789abc"
 
+// Service for ScoreBoard
+#define SCOREBOARD_SERVICE_UUID "12345678-1234-1234-1234-1234567890AB"
+#define SCOREBOARD_CHAR_UUID "ABCDEFAB-1234-1234-1234-1234567890AB"
+
+// Global variables
 extern int homeScore;
 extern int awayScore;
 
-extern BluetoothSerial SerialBT;     // Now the type is known everywhere
-extern BLECharacteristic* pScoreChar;
-
+// Function declarations
 uint32_t getRemainingTimerSeconds();
-
 void websiteSetup();
 void scoreChange(int score, int who);
-void sendScoreNew();
+void sendScoreNew();  // This will now be implemented in website.cpp
+void sendScoreToPWA(); // Helper function to send to PWA
 
 void changeNames(String newHome, String newAway);
-
 void bleInit();
 void handleBluetooth();
-
-void timerReset();        // reset to 30:00
-void timerPause(bool);    // pause
-void timerTogglePause();  // toggle pause/resume
-
+void timerReset();
+void timerPause(bool);
+void timerTogglePause();
+void setupScoreBoardBLE();
 
 #endif // WEBSITE_H

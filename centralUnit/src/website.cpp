@@ -10,6 +10,11 @@
 #include <vector>
 #include <website.h>
 
+// Define BLE variables here
+BLECharacteristic* pScoreChar = nullptr;
+BLECharacteristic* pDataCharacteristic = nullptr;
+bool pwaConnected = false;
+
 std::map<std::string, std::string> teamToSender
     = { { "HOME", "ESP32-BLE-Sender-1" }, { "AWAY", "ESP32-BLE-Sender-2" } };
 
@@ -33,7 +38,7 @@ struct SenderDevice {
     int rssi;
     String lastData;
     unsigned long lastUpdate;
-    unsigned long lastDataTime; // Added for connection monitoring
+    unsigned long lastDataTime;
 
     SenderDevice()
         : address(BLEAddress("00:00:00:00:00:00"))
@@ -62,10 +67,8 @@ std::map<std::string, ConnectionHealth> connectionHealthMap;
 std::map<BLERemoteCharacteristic*, std::string> characteristicToSenderMap;
 
 BLEServer* pServer = nullptr;
-BLECharacteristic* pDataCharacteristic = nullptr;
 BLECharacteristic* pStatusCharacteristic = nullptr;
 BLECharacteristic* pCommandCharacteristic = nullptr;
-bool pwaConnected = false;
 bool oldPwaConnected = false;
 
 // Target sender names
@@ -77,6 +80,81 @@ void sendDeviceListToPWA();
 void forceReconnect(const std::string& deviceName);
 void cleanupStaleConnections();
 void monitorConnections();
+bool syncScoreToSender(const std::string& senderName, int newScore);
+
+// NEW FUNCTION: Send score to PWA
+void sendScoreToPWA() {
+    if (!pDataCharacteristic || !pwaConnected) {
+        Serial.println("PWA not connected, skipping score update");
+        return;
+    }
+    
+    uint32_t matchTime = getRemainingTimerSeconds();
+    String jsonData =
+        "{"
+        "\"type\":\"score_update\","
+        "\"From\":\"CentralUnit\","
+        "\"Time\":" + String(matchTime) + ","
+        "\"Score\":[" + String(homeScore) + "," + String(awayScore) + "],"
+        "\"Accuracy\":[70,65],"
+        "\"GoalAttempt\":[54,48]"
+        "}";
+    
+    pDataCharacteristic->setValue((uint8_t*)jsonData.c_str(), jsonData.length());
+    pDataCharacteristic->notify(true);
+    
+    Serial.print("✅ Score sent to PWA: ");
+    Serial.println(jsonData);
+}
+
+// NEW FUNCTION: Send score to displays (LED scoreboards)
+void sendScoreToDisplays() {
+    if (!pScoreChar) {
+        Serial.println("ScoreBoard BLE not initialized");
+        return;
+    }
+    
+    uint32_t matchTime = getRemainingTimerSeconds();
+    String jsonData =
+        "{"
+        "\"From\":\"CentralUnit\","
+        "\"Time\":" + String(matchTime) + ","
+        "\"Score\":[" + String(homeScore) + "," + String(awayScore) + "],"
+        "\"Accuracy\":[70,65],"
+        "\"GoalAttempt\":[54,48]"
+        "}";
+    
+    pScoreChar->setValue((uint8_t*)jsonData.c_str(), jsonData.length());
+    pScoreChar->notify(true);
+    
+    Serial.print("📺 Score sent to displays: ");
+    Serial.println(jsonData);
+}
+
+// REPLACEMENT for the old sendScoreNew in scoreData.cpp
+void sendScoreNew() {
+    static int lastHomeScore = -1;
+    static int lastAwayScore = -1;
+    
+    // Check if score actually changed
+    if (homeScore == lastHomeScore && awayScore == lastAwayScore) {
+        return;
+    }
+    
+    lastHomeScore = homeScore;
+    lastAwayScore = awayScore;
+    
+    Serial.print("🔄 Score update detected: ");
+    Serial.print(homeScore);
+    Serial.print(" - ");
+    Serial.println(awayScore);
+    
+    // Send to PWA
+    sendScoreToPWA();
+    
+    // Send to displays
+    sendScoreToDisplays();
+}
 
 // Callback for PWA connection events
 class GatewayServerCallbacks : public BLEServerCallbacks {
@@ -88,6 +166,9 @@ class GatewayServerCallbacks : public BLEServerCallbacks {
         String status = "connected";
         pStatusCharacteristic->setValue(status.c_str());
         pStatusCharacteristic->notify();
+        
+        // Send current score when PWA connects
+        sendScoreNew();
     }
 
     void onDisconnect(BLEServer* pServer)
@@ -123,17 +204,43 @@ bool syncScoreToSender(const std::string& senderName, int newScore)
         return false;
     }
 
+    // Build JSON command
     String command = "{\"command\":\"set_score\",\"score\":" + String(newScore) + "}";
     Serial.print("📤 Syncing score to ");
     Serial.print(senderName.c_str());
     Serial.print(": ");
     Serial.println(command);
 
-    bool ok = sender->rxCharacteristic->writeValue((uint8_t*)command.c_str(), command.length(), false);
-    sendScoreNew();
+    // Send in chunks
+    const int chunkSize = 20;  // safe default for BLE
+    bool success = true;
 
-    Serial.println(ok ? "✅ Score sync sent" : "❌ Failed to send score sync");
-    return ok;
+    for (int i = 0; i < command.length(); i += chunkSize) {
+        int len = min(chunkSize, (int)(command.length() - i));
+        bool ok = sender->rxCharacteristic->writeValue(
+            (uint8_t*)(command.c_str() + i),
+            len,
+            false  // no response
+        );
+
+        if (!ok) {
+            Serial.println("❌ Failed to send chunk");
+            success = false;
+            break;
+        }
+
+        delay(5); // small delay to avoid overwhelming BLE stack
+    }
+
+    // Send score update to PWA and displays
+    if (success) {
+        sendScoreNew();
+        Serial.println("✅ Score sync sent and broadcasted");
+    } else {
+        Serial.println("❌ Score sync failed");
+    }
+
+    return success;
 }
 
 // Callback for commands from PWA
@@ -236,6 +343,9 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
                 Serial.print(teamStr);
                 Serial.print(" = ");
                 Serial.println(*scorePtr);
+
+                // Trigger score update to PWA and displays
+                sendScoreNew();
 
                 std::string teamKey = teamStr.c_str();
                 auto it = teamToSender.find(teamKey);
@@ -807,12 +917,46 @@ void cleanupStaleConnections()
     }
 }
 
+// Setup ScoreBoard BLE
+void setupScoreBoardBLE() {
+    Serial.println("Setting up ScoreBoard BLE Service...");
+    
+    if (!pServer) {
+        Serial.println("ERROR: BLE Server not initialized for ScoreBoard!");
+        return;
+    }
+    
+    BLEService* pScoreService = pServer->createService(SCOREBOARD_SERVICE_UUID);
+    
+    if (!pScoreService) {
+        Serial.println("ERROR: Failed to create ScoreBoard service!");
+        return;
+    }
+    
+    pScoreChar = pScoreService->createCharacteristic(
+        SCOREBOARD_CHAR_UUID,
+        BLECharacteristic::PROPERTY_READ |
+        BLECharacteristic::PROPERTY_NOTIFY
+    );
+    
+    if (!pScoreChar) {
+        Serial.println("ERROR: Failed to create ScoreBoard characteristic!");
+        return;
+    }
+    
+    pScoreChar->addDescriptor(new BLE2902());
+    pScoreService->start();
+    
+    Serial.println("✅ ScoreBoard BLE Service started");
+}
+
 // Setup BLE Gateway
 void setupBLEGateway()
 {
     Serial.println("Setting up BLE Gateway...");
 
     BLEDevice::init(DEVICE_NAME);
+    BLEDevice::setMTU(512);
 
     esp_power_level_t power = ESP_PWR_LVL_P9;
     esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, power);
@@ -838,8 +982,13 @@ void setupBLEGateway()
 
     pService->start();
 
+    // Setup ScoreBoard service for displays
+    setupScoreBoardBLE();
+
+    // Setup advertising for BOTH services
     BLEAdvertising* pAdvertising = pServer->getAdvertising();
     pAdvertising->addServiceUUID(GATEWAY_SERVICE_UUID);
+    pAdvertising->addServiceUUID(SCOREBOARD_SERVICE_UUID);  // Add ScoreBoard service
     pAdvertising->setScanResponse(true);
     pAdvertising->setMinInterval(0x20);
     pAdvertising->setMaxInterval(0x40);
@@ -848,11 +997,13 @@ void setupBLEGateway()
 
     BLEDevice::startAdvertising();
 
-    Serial.println("\nBLE Gateway READY for PWA");
+    Serial.println("\n✅ BLE Gateway READY for PWA");
     Serial.print("Device Name: ");
     Serial.println(DEVICE_NAME);
-    Serial.print("Service UUID: ");
+    Serial.print("Gateway Service UUID: ");
     Serial.println(GATEWAY_SERVICE_UUID);
+    Serial.print("ScoreBoard Service UUID: ");
+    Serial.println(SCOREBOARD_SERVICE_UUID);
 }
 
 void bleInit()
@@ -881,6 +1032,8 @@ void handleBluetooth()
     if (pwaConnected && !oldPwaConnected) {
         oldPwaConnected = pwaConnected;
         sendDeviceListToPWA();
+        // Send initial score when PWA connects
+        sendScoreNew();
     }
 
     // Monitor connection health every 5 seconds
@@ -911,6 +1064,7 @@ void handleBluetooth()
         lastDeviceListTime = millis();
     }
 
+    // Handle score sync to senders
     if (gSyncPending && gSync.pending) {
         gSyncPending = false;
         gSync.pending = false;
