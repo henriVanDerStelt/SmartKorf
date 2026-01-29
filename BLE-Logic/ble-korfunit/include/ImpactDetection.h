@@ -15,6 +15,7 @@ public:
 
     void begin();
     void update();
+    void getPogingen(int pogingen);
 
 private:
 

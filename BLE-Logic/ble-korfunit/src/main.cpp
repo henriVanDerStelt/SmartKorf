@@ -4,6 +4,8 @@
 #include "ImpactDetection.h"
 
 ImpactDetection impact;
+static unsigned long lastScoreSend = 0;
+
 
 void setup() {
     Serial.begin(115200);
@@ -32,5 +34,6 @@ void loop() {
     loopBLE();
     impact.update();
     
+    // impact.getPogingen(getAttempts()); // To sync attempts
     delay(10);
 }

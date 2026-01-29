@@ -1,8 +1,8 @@
 #include "ImpactDetection.h"
+#include "goal_detector.h"  // Add this include
 
 // EDGE IMPULSE — ONLY HERE
 #include <edge-impulse-sdk/classifier/ei_run_classifier.h>
-
 
 // Static pointer for EI callback
 static ImpactDetection* instancePtr = nullptr;
@@ -59,15 +59,20 @@ void ImpactDetection::update() {
 
             if (run_classifier(&signal, &result, false) == EI_IMPULSE_OK) {
                 for (size_t i = 0; i < EI_CLASSIFIER_LABEL_COUNT; i++) {
-                    ei_printf("%s: %.3f\n",
-                              result.classification[i].label,
-                              result.classification[i].value);
+                    // ei_printf("%s: %.3f\n",
+                    //           result.classification[i].label,
+                    //           result.classification[i].value);
 
                      if (strcmp(result.classification[i].label, "schot") == 0) {
                             if (result.classification[i].value > 0.5) {
                                 pogingen++;
                                 Serial.print("Poging nummer: ");
                                 Serial.println(pogingen);
+                                
+                                // Notify goal detector that a shot was detected
+                                // You'll need to add this function to goal_detector.h
+                                // extern void notifyShotDetectedByModel();
+                                // notifyShotDetectedByModel();
                             }
                         }
                 }
@@ -109,3 +114,6 @@ std::array<float, 8> ImpactDetection::readSensors() {
     };
 }
 
+void ImpactDetection::getPogingen(int pogingen) {
+    this->pogingen = pogingen;
+}

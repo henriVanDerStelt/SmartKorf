@@ -17,5 +17,8 @@ int getCurrentScore();
 bool isTopSensorActive();
 bool isBottomSensorActive();
 void resetGoalDetection();
+bool areSensorsEnabled();
+void incrementAttempts();
+int getAttempts();
 
 #endif // GOAL_DETECTOR_H

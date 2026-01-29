@@ -1,5 +1,6 @@
 #include "goal_detector.h"
 #include "ble_handler.h"
+#include "ImpactDetection.h"
 
 // Sensor objects - only create if sensors are enabled
 #ifdef USE_SENSORS
@@ -16,7 +17,29 @@ static bool topTriggered = false;
 static unsigned long lastGoalTime = 0;
 static unsigned long lastDebugTime = 0;
 static bool sensorsEnabled = false;
+static unsigned long topTriggerTime = 0;
+static bool shotDetectedByModel = false;
 
+// Attempts counter
+int pogingen = 0;
+static unsigned long lastTopTriggerTime = 0;
+static const unsigned long SHOT_DETECTION_WINDOW = 2000; // 2 seconds window for model detection
+
+void incrementAttempts() {
+    pogingen++;
+    Serial.print("📊 Attempts incremented: ");
+    Serial.println(pogingen);
+    
+    // Send attempts to BLE if connected
+    if (isDeviceConnected()) {
+        String message = "{\"pogingen\":" + String(pogingen) + ",\"type\":\"attempt\"}";
+        // Note: You'll need to create a BLE function for this
+    }
+}
+
+int getAttempts() {
+    return pogingen;
+}
 void setupSensors() {
     #ifdef USE_SENSORS
     Serial.println("Initializing VL53L1X sensors...");
@@ -72,8 +95,6 @@ void setupSensors() {
     sensorsEnabled = false;
     #endif
 }
-
-// Safe sensor reading functions
 #ifdef USE_SENSORS
 static bool readTopSensor() {
     if (tof_top.dataReady()) {
@@ -104,6 +125,12 @@ static bool readTopSensor() { return false; }
 static bool readBottomSensor() { return false; }
 #endif
 
+// Add this function to be called from ImpactDetection when a shot is detected
+void notifyShotDetectedByModel() {
+    shotDetectedByModel = true;
+    Serial.println("🎯 Shot detected by Edge Impulse model");
+}
+
 void checkForGoal() {
     // If sensors are not enabled, don't try to detect goals
     if (!sensorsEnabled) {
@@ -130,30 +157,72 @@ void checkForGoal() {
             Serial.print(", Top active: ");
             Serial.print(topActive ? "YES" : "NO");
             Serial.print(", Bottom active: ");
-            Serial.println(bottomActive ? "YES" : "NO");
+            Serial.print(bottomActive ? "YES" : "NO");
+            Serial.print(", Attempts: ");
+            Serial.println(pogingen);
         }
         #else
         Serial.println("📊 Sensor simulation mode");
         #endif
     }
     
+    // Check if shot was detected by model within the time window
+    unsigned long timeSinceTopTrigger = currentTime - topTriggerTime;
+    if (topTriggered && !shotDetectedByModel && timeSinceTopTrigger > SHOT_DETECTION_WINDOW) {
+        // Top triggered but no shot detected by model within time window
+        Serial.println("⚠️ Top triggered but no shot detected by model - counting as attempt");
+        incrementAttempts();
+        topTriggered = false;
+        shotDetectedByModel = false;
+        return;
+    }
+    
+    // Reset shot detection flag if time window passed
+    if (topTriggered && timeSinceTopTrigger > SHOT_DETECTION_WINDOW) {
+        shotDetectedByModel = false;
+    }
+    
     // Goal detection logic
     if (topActive && !topTriggered) {
         topTriggered = true;
-        Serial.println("📊 Top sensor triggered - waiting for bottom...");
+        topTriggerTime = currentTime;
+        shotDetectedByModel = false; // Reset for new trigger
+        Serial.println("📊 Top sensor triggered - waiting for bottom or model detection...");
     }
     
+    // If top triggered but not bottom, and model detects shot, count as attempt
+    if (topTriggered && !bottomActive && shotDetectedByModel) {
+        Serial.println("🎯 Shot detected but no goal - counting as attempt");
+        incrementAttempts();
+        topTriggered = false;
+        shotDetectedByModel = false;
+    }
+    
+    // Goal detection (both sensors triggered)
     if (topTriggered && bottomActive) {
         updateScore(getCurrentScore() + 1);
         lastGoalTime = currentTime;
         topTriggered = false;
+        shotDetectedByModel = false;
         
         Serial.print("🎯 GOAL DETECTED! New score: ");
         Serial.println(getCurrentScore());
         
-        // Notify gateway via BLE
+        // Send score and attempts to BLE
+        String message = "{\"score\":" + String(getCurrentScore()) + 
+                        ",\"pogingen\":" + String(pogingen) + 
+                        ",\"type\":\"goal\"}";
+        // You'll need to modify sendScoreToBLE or create a new function
+        
         sendScoreToBLE("goal");
         delay(100); // Small delay to prevent multiple detections
+    }
+    
+    // Reset top trigger if bottom is never detected after some time
+    if (topTriggered && currentTime - topTriggerTime > 3000) { // 3 second timeout
+        Serial.println("⏰ Top trigger timeout - resetting");
+        topTriggered = false;
+        shotDetectedByModel = false;
     }
 }
 
@@ -178,6 +247,8 @@ bool isBottomSensorActive() {
 void resetGoalDetection() {
     topTriggered = false;
     lastGoalTime = 0;
+    pogingen = 0;
+    shotDetectedByModel = false;
 }
 
 bool areSensorsEnabled() {

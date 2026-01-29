@@ -4,7 +4,6 @@
 #include <Arduino.h>
 
 // Constants shared across modules
-// #define DEVICE_NAME "ESP32-BLE-Sender-2"
 #define DEVICE_NAME "ESP32-BLE-Sender-1"
 #define SDA_PIN 6
 #define SCL_PIN 7
@@ -19,6 +18,7 @@
 extern int score;
 extern bool deviceConnected;
 extern bool connectionValid;
+extern int pogingen;  // Add this
 
 // Function declarations
 void setupKorfUnit();
