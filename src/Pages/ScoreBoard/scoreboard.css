@@ -51,6 +51,13 @@
   width: 100%;
 }
 
+.stats-icon {
+    width: 30px;
+    height: 30px;
+    margin-left: 2rem;
+    vertical-align: middle;
+}
+
 /* Responsive tweaks */
 @media (max-width: 1100px) {
     .scoreboard-container {

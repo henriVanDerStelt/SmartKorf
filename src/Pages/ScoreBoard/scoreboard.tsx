@@ -5,6 +5,9 @@ import Timer, { TIMER_DURATION } from "../../Components/Timer/timer";
 import { useEspData } from "../../Contexts/EspDataContext";
 import { useCommandReceiver } from "../../Hooks/useCommandReceiver";
 import { supabase } from "../../supabaseClient";
+import Tooltip from "../../Components/Tooltip/Tooltip";
+
+import Target from "../../Assets/Icons/focus.png";
 
 function ScoreBoard() {
   const { devices } = useEspData();
@@ -15,6 +18,9 @@ function ScoreBoard() {
   const [currentGameId, setCurrentGameId] = useState<string | null>(null);
   const [homeScore, setHomeScore] = useState(0);
   const [awayScore, setAwayScore] = useState(0);
+  const [goalAttempt, setGoalAttempt] = useState<[number, number]>([0, 0]);
+  const [homeAccuracy, setHomeAccuracy] = useState(0);
+  const [awayAccuracy, setAwayAccuracy] = useState(0);
 
   // Sync met CentralUnit data
   useEffect(() => {
@@ -24,7 +30,6 @@ function ScoreBoard() {
         console.log("[CentralUnit] device received:", {
           time: device.time,
           score: device.score,
-          accuracy: device.accuracy,
           goalAttempt: device.goalAttempt,
         });
 
@@ -52,9 +57,14 @@ function ScoreBoard() {
           }
         }
 
-        // Future: Use accuracy and goalAttempt when needed
-        // if (device.accuracy) { ... }
-        // if (device.goalAttempt) { ... }
+        const [homeAttempts, awayAttempts] = device.goalAttempt || [0, 0];
+        const homeAcc =
+          homeScore > 0 ? Math.round((homeScore / homeAttempts) * 100) : 0;
+        const awayAcc =
+          awayScore > 0 ? Math.round((awayScore / awayAttempts) * 100) : 0;
+        setGoalAttempt([homeAttempts, awayAttempts]);
+        setHomeAccuracy(homeAcc);
+        setAwayAccuracy(awayAcc);
       }
     });
   }, [devices, homeScore, awayScore, timeLeft]);
@@ -142,6 +152,12 @@ function ScoreBoard() {
             value={homeTeamName}
             onChange={handleHomeNameChange}
           />
+          <Tooltip
+            text={`Attempts: ${homeDevice ? goalAttempt[0] : 0} Accuracy: ${homeAccuracy}%`}
+            position="bottom"
+          >
+            <img src={Target} className="stats-icon" />
+          </Tooltip>
           <ScoreCounter data={homeData} team="home" />
           {homeDevice && (
             <div className="device-info">
@@ -159,6 +175,12 @@ function ScoreBoard() {
             value={awayTeamName}
             onChange={handleAwayNameChange}
           />
+          <Tooltip
+            text={`Attempts: ${awayDevice ? goalAttempt[1] : 0} Accuracy: ${awayAccuracy}%`}
+            position="bottom"
+          >
+            <img src={Target} className="stats-icon" />
+          </Tooltip>
           <ScoreCounter data={awayData} team="away" />
           {awayDevice && (
             <div className="device-info">
