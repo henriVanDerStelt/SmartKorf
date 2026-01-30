@@ -1,5 +1,5 @@
 #include "ImpactDetection.h"
-#include "goal_detector.h"  // Add this include
+#include "korfunit.h"
 
 // EDGE IMPULSE — ONLY HERE
 #include <edge-impulse-sdk/classifier/ei_run_classifier.h>
@@ -21,19 +21,29 @@ ImpactDetection::ImpactDetection()
 
 
 void ImpactDetection::begin() {
-    Wire.begin(5, 6);
+    // IMPORTANT: Reset I2C bus after ToF sensors have initialized  
+    Serial.println("Initializing MPU6050...");
+    
     delay(500);
 
     if (!mpu.begin(0x68, &Wire)) {
-        Serial.println("MPU6050 NOT FOUND");
-        return;
+        Serial.println("MPU6050 NOT FOUND at 0x68, trying 0x69...");
+        if (!mpu.begin(0x69, &Wire)) {
+            Serial.println("MPU6050 completely NOT FOUND!");
+            Serial.println("Check I2C connections and pull-up resistors");
+            return;
+        } else {
+            Serial.println("MPU6050 OK at 0x69");
+        }
+    } else {
+        Serial.println("MPU6050 OK at 0x68");
     }
 
     mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
     mpu.setGyroRange(MPU6050_RANGE_500_DEG);
     mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
 
-    Serial.println("MPU6050 OK");
+    Serial.println("MPU6050 initialized successfully");
     ei_printf("EI frame size: %d\n", EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE);
 }
 
@@ -102,7 +112,7 @@ std::array<float, 8> ImpactDetection::readSensors() {
     sensors_event_t t;
     mpu.getEvent(&accel, &gyro, &t);
 
-    return {
+    std::array<float, 8> values = {
         (float)analogRead(ANALOG_PIN),
         (float)digitalRead(DIGITAL_PIN),
         accel.acceleration.x,
@@ -112,6 +122,18 @@ std::array<float, 8> ImpactDetection::readSensors() {
         gyro.gyro.y,
         gyro.gyro.z
     };
+
+    // Print values
+    Serial.print("Analog: "); Serial.print(values[0]); Serial.print(", ");
+    Serial.print("Digital: "); Serial.print(values[1]); Serial.print(", ");
+    Serial.print("Accel X: "); Serial.print(values[2]); Serial.print(", ");
+    Serial.print("Accel Y: "); Serial.print(values[3]); Serial.print(", ");
+    Serial.print("Accel Z: "); Serial.print(values[4]); Serial.print(", ");
+    Serial.print("Gyro X: "); Serial.print(values[5]); Serial.print(", ");
+    Serial.print("Gyro Y: "); Serial.print(values[6]); Serial.print(", ");
+    Serial.print("Gyro Z: "); Serial.println(values[7]);
+
+    return values;
 }
 
 void ImpactDetection::getPogingen(int pogingen) {

@@ -1,5 +1,6 @@
 #include "ble_handler.h"
 #include "korfunit.h"
+#include "goal_detector.h"
 
 // BLE objects
 static BLEServer* pServer = nullptr;
@@ -17,6 +18,11 @@ static unsigned long connectionTimeout = 0;
 // Score variable (shared with goal detector)
 int score = 0;
 String incomingBuffer = ""; // global or static
+static unsigned long lastChunkTime = 0;
+static const unsigned long CHUNK_TIMEOUT = 1000; // 1 second timeout for incomplete messages
+
+void processCommand(DynamicJsonDocument& doc);
+
 // GatewayCommandCallbacks implementation
 void GatewayCommandCallbacks::onWrite(BLECharacteristic* pCharacteristic)
 {
@@ -25,34 +31,76 @@ void GatewayCommandCallbacks::onWrite(BLECharacteristic* pCharacteristic)
         return;
 
     incomingBuffer += chunk; // append fragment
+    lastChunkTime = millis(); // Update timestamp
 
-    Serial.print("📥 Received chunk: ");
+    Serial.print("Received chunk: ");
     Serial.println(chunk);
+    Serial.print("Buffer so far: ");
+    Serial.println(incomingBuffer);
 
-    // Only attempt JSON parsing if it looks complete
+    // Try to parse the buffer periodically or when we think it's complete
+    bool shouldTryParse = false;
+    
+    // Check if buffer looks like it might be complete
     if (incomingBuffer.startsWith("{") && incomingBuffer.endsWith("}")) {
+        shouldTryParse = true;
+    }
+    // Also try to parse if we haven't received data in a while (timeout)
+    else if (millis() - lastChunkTime > CHUNK_TIMEOUT && incomingBuffer.length() > 0) {
+        Serial.println("Chunk timeout - attempting to parse incomplete buffer");
+        shouldTryParse = true;
+    }
+    
+    if (shouldTryParse) {
         DynamicJsonDocument doc(200);
         DeserializationError err = deserializeJson(doc, incomingBuffer);
-
+        
         if (err) {
-            Serial.print("❌ JSON parse error: ");
+            Serial.print("JSON parse error: ");
             Serial.println(err.c_str());
-            incomingBuffer = ""; // reset buffer to avoid infinite retry
+            Serial.print("Buffer content: ");
+            Serial.println(incomingBuffer);
+            
+            // Try to find a valid JSON object within the buffer
+            int start = incomingBuffer.indexOf('{');
+            int end = incomingBuffer.lastIndexOf('}');
+            
+            if (start != -1 && end != -1 && end > start) {
+                String potentialJson = incomingBuffer.substring(start, end + 1);
+                Serial.print("Trying to extract JSON: ");
+                Serial.println(potentialJson);
+                
+                err = deserializeJson(doc, potentialJson);
+                if (!err) {
+                    // Successfully parsed extracted JSON
+                    processCommand(doc);
+                    incomingBuffer = incomingBuffer.substring(end + 1); // Keep any remaining data
+                    return;
+                }
+            }
+            
+            incomingBuffer = ""; // reset buffer
             return;
         }
-
-        // process command
-        if (doc["command"].is<const char*>()) {
-            String command = doc["command"].as<String>();
-            if (command == "set_score" && doc["score"].is<int>()) {
-                score = doc["score"];
-                Serial.print("🎯 Score set by gateway: ");
-                Serial.println(score);
-                sendScoreToBLE("sync");
-            }
-        }
-
+        
+        // Successfully parsed - process the command
+        processCommand(doc);
         incomingBuffer = ""; // reset after processing
+    }
+}
+
+// Helper function to process the command
+void processCommand(DynamicJsonDocument& doc) {
+    if (doc["command"].is<const char*>()) {
+        String command = doc["command"].as<String>();
+        if (command == "set_score" && doc["score"].is<int>()) {
+            score = doc["score"];
+            Serial.print("🎯 Score set by gateway: ");
+            Serial.println(score);
+            sendScoreToBLE("sync");
+        }
+    } else {
+        Serial.println("No valid command found in JSON");
     }
 }
 
@@ -69,14 +117,14 @@ void MyServerCallbacks::onConnect(BLEServer* pServer)
     Serial.println(mtu);
     connectionTimeout = 0;
     lastPingTime = 0;
-
-    Serial.println("✅ Gateway connected!");
-
+    
+    Serial.println("Gateway connected!");
+    
     if (pTxCharacteristic != nullptr) {
-        String message = "{\"score\":" + String(score) + ",\"type\":\"init\",\"status\":\"connected\"}";
+        String message = "{\"score\":" + String(score) + ",\"pogingen\":" + String(getAttempts()) + ",\"type\":\"init\",\"status\":\"connected\"}";
         pTxCharacteristic->setValue(message.c_str());
         pTxCharacteristic->notify();
-        Serial.print("📤 Sent initial score: ");
+        Serial.print("Sent initial score: ");
         Serial.println(message);
     }
 }
@@ -87,9 +135,9 @@ void MyServerCallbacks::onDisconnect(BLEServer* pServer)
     connectionValid = false;
     connectionTimeout = 0;
     lastPingTime = 0;
-
-    Serial.println("❌ Gateway disconnected!");
-
+    
+    Serial.println("Gateway disconnected!");
+    
     delay(500);
 
     // Clean restart of advertising
@@ -120,14 +168,13 @@ void MyServerCallbacks::onDisconnect(BLEServer* pServer)
     pAdvertising->addServiceUUID(SERVICE_UUID);
     pAdvertising->setScanResponse(true);
     BLEDevice::startAdvertising();
-
-    Serial.println("🔄 Advertising restarted from scratch");
+    
+    Serial.println("Advertising restarted from scratch");
 }
 
 // BLE management functions
-void setupBLE()
-{
-    Serial.println("📡 Initializing BLE...");
+void setupBLE() {
+    Serial.println("Initializing BLE...");
     BLEDevice::init(DEVICE_NAME);
     BLEDevice::setMTU(512);
 
@@ -153,13 +200,13 @@ void setupBLE()
     pAdvertising->addServiceUUID(SERVICE_UUID);
     pAdvertising->setScanResponse(true);
     BLEDevice::startAdvertising();
-
-    Serial.println("✅ BLE Advertising started!");
-    Serial.println("🔄 Ready for bidirectional communication with ping");
+    
+    Serial.println("BLE Advertising started!");
+    Serial.println("Ready for bidirectional communication with ping");
     Serial.print("Device Name: ");
     Serial.println(DEVICE_NAME);
-    Serial.println("📡 Ping interval: 3 seconds");
-    Serial.println("⏱️ Connection timeout: 10 seconds");
+    Serial.println("Ping interval: 3 seconds");
+    Serial.println("Connection timeout: 10 seconds");
 }
 
 void loopBLE()
@@ -169,27 +216,27 @@ void loopBLE()
     if (!deviceConnected && oldDeviceConnected) {
         delay(500);
         oldDeviceConnected = deviceConnected;
-        Serial.println("🔄 Restarted advertising");
+        Serial.println("Restarted advertising");
     }
 
     if (deviceConnected && !oldDeviceConnected) {
         oldDeviceConnected = deviceConnected;
-        Serial.println("✅ Device connected!");
+        Serial.println("Device connected!");
     }
 }
 
 void sendScoreToBLE(const char* type)
 {
     if (deviceConnected && pTxCharacteristic != nullptr) {
-        String message = "{\"score\":" + String(score) + ",\"type\":\"" + String(type) + "\"}";
+        String message = "{\"score\":" + String(score) + ",\"pogingen\":" + String(getAttempts()) + ",\"type\":\"" + String(type) + "\"}";
         pTxCharacteristic->setValue(message.c_str());
         pTxCharacteristic->notify();
-
-        Serial.print("📤 Sent to gateway: ");
+        
+        Serial.print("Sent to gateway: ");
         Serial.println(message);
         connectionValid = true;
     } else {
-        Serial.print("❌ Not connected to gateway. Current score: ");
+        Serial.print("Not connected to gateway. Current score: ");
         Serial.println(score);
     }
 }
@@ -203,7 +250,7 @@ void sendPing()
 
         connectionValid = true;
         connectionTimeout = 0;
-        Serial.println("📡 Ping sent (connection good)");
+        Serial.println("Ping sent (connection good)");
     }
 }
 
@@ -218,11 +265,11 @@ void checkConnectionHealth()
         if (!connectionValid) {
             if (connectionTimeout == 0) {
                 connectionTimeout = millis();
-                Serial.println("⚠️ Connection appears weak");
+                Serial.println("Connection appears weak");
             }
 
             if (millis() - connectionTimeout > CONNECTION_TIMEOUT) {
-                Serial.println("⚠️ Connection lost - forcing disconnect");
+                Serial.println("Connection lost - forcing disconnect");
                 deviceConnected = false;
                 connectionValid = false;
                 connectionTimeout = 0;

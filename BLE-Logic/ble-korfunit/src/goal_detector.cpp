@@ -4,8 +4,8 @@
 
 // Sensor objects - only create if sensors are enabled
 #ifdef USE_SENSORS
-static Adafruit_VL53L1X tof_top(XSHUT_TOP);
-static Adafruit_VL53L1X tof_bottom(XSHUT_BOTTOM);
+static VL53L1X tof_top;      // Changed from Adafruit_VL53L1X
+static VL53L1X tof_bottom;   // Changed from Adafruit_VL53L1X
 #else
 // Dummy sensor objects or pointers
 static void* tof_top = nullptr;
@@ -42,65 +42,65 @@ int getAttempts() {
 }
 void setupSensors() {
     #ifdef USE_SENSORS
-    Serial.println("Initializing VL53L1X sensors...");
+    Serial.println("Initializing VL53L1X sensors with Pololu library...");
     
-    Wire.begin(SDA_PIN, SCL_PIN, 400000);
+    // Initialize XSHUT pins
+    Serial.print("Initializing XSHUT pins - TOP: ");
+    Serial.print(XSHUT_TOP);
+    Serial.print(", BOTTOM: ");
+    Serial.println(XSHUT_BOTTOM);
     
     pinMode(XSHUT_TOP, OUTPUT);
     pinMode(XSHUT_BOTTOM, OUTPUT);
+    
+    // Set both XSHUT LOW to power down sensors
     digitalWrite(XSHUT_TOP, LOW);
     digitalWrite(XSHUT_BOTTOM, LOW);
-    delay(10);
+    delay(100);
     
+    // Power up TOP sensor first with custom address
     digitalWrite(XSHUT_TOP, HIGH);
-    delay(10);
+    delay(100);
     
-    if (!tof_top.begin(0x30, &Wire)) {
-        if (!tof_top.begin(0x29, &Wire)) {
-            Serial.println("❌ Top sensor completely failed!");
-        } else {
-            Serial.println("⚠️ Top sensor using default address 0x29");
-        }
-    } else {
-        Serial.println("✅ Top sensor found at 0x30");
+    Serial.println("Initializing TOP sensor...");
+    if (!tof_top.init()) {
+        Serial.println("Failed to initialize TOP sensor!");
+        sensorsEnabled = false;
+        return;
     }
+    tof_top.setAddress(0x30);  // Set custom address
+    tof_top.setDistanceMode(VL53L1X::Long);
+    tof_top.setMeasurementTimingBudget(50000);
+    tof_top.startContinuous(50);
+    Serial.println("Top sensor initialized at 0x30");
     
+    // Power up BOTTOM sensor with different address
     digitalWrite(XSHUT_BOTTOM, HIGH);
-    delay(10);
+    delay(100);
     
-    if (!tof_bottom.begin(0x31, &Wire)) {
-        if (!tof_bottom.begin(0x32, &Wire)) {
-            if (!tof_bottom.begin(0x29, &Wire)) {
-                Serial.println("❌ Bottom sensor completely failed!");
-            } else {
-                Serial.println("⚠️ Bottom sensor using default address 0x29");
-            }
-        } else {
-            Serial.println("⚠️ Bottom sensor using address 0x32");
-        }
-    } else {
-        Serial.println("✅ Bottom sensor found at 0x31");
+    Serial.println("Initializing BOTTOM sensor...");
+    if (!tof_bottom.init()) {
+        Serial.println("Failed to initialize BOTTOM sensor!");
+        sensorsEnabled = false;
+        return;
     }
-    
-    tof_top.setTimingBudget(50);
-    tof_bottom.setTimingBudget(50);
-    
-    tof_top.startRanging();
-    tof_bottom.startRanging();
+    tof_bottom.setAddress(0x31);  // Set custom address
+    tof_bottom.setDistanceMode(VL53L1X::Long);
+    tof_bottom.setMeasurementTimingBudget(50000);
+    tof_bottom.startContinuous(50);
+    Serial.println("Bottom sensor initialized at 0x31");
     
     sensorsEnabled = true;
-    Serial.println("✅ Sensors initialized!");
+    Serial.println("✅ Sensors initialized with Pololu library!");
     #else
-    Serial.println("⚠️ Sensor support disabled at compile time");
+    Serial.println("Sensor support disabled at compile time");
     sensorsEnabled = false;
     #endif
 }
 #ifdef USE_SENSORS
 static bool readTopSensor() {
     if (tof_top.dataReady()) {
-        int distance = tof_top.distance();
-        tof_top.clearInterrupt();
-        
+        int distance = tof_top.read(false);  // false = don't wait for new data
         if (distance > 0 && distance < 4000) {
             return distance < TRIGGER_DISTANCE;
         }
@@ -110,9 +110,7 @@ static bool readTopSensor() {
 
 static bool readBottomSensor() {
     if (tof_bottom.dataReady()) {
-        int distance = tof_bottom.distance();
-        tof_bottom.clearInterrupt();
-        
+        int distance = tof_bottom.read(false);  // false = don't wait for new data
         if (distance > 0 && distance < 4000) {
             return distance < TRIGGER_DISTANCE;
         }
@@ -152,7 +150,7 @@ void checkForGoal() {
         lastDebugTime = currentTime;
         #ifdef USE_SENSORS
         if (tof_top.dataReady() && tof_bottom.dataReady()) {
-            Serial.print("📊 Sensors active - Top triggered: ");
+            Serial.print("Sensors active - Top triggered: ");
             Serial.print(topTriggered ? "YES" : "NO");
             Serial.print(", Top active: ");
             Serial.print(topActive ? "YES" : "NO");
@@ -162,7 +160,7 @@ void checkForGoal() {
             Serial.println(pogingen);
         }
         #else
-        Serial.println("📊 Sensor simulation mode");
+        Serial.println("Sensor simulation mode");
         #endif
     }
     
@@ -186,8 +184,7 @@ void checkForGoal() {
     if (topActive && !topTriggered) {
         topTriggered = true;
         topTriggerTime = currentTime;
-        shotDetectedByModel = false; // Reset for new trigger
-        Serial.println("📊 Top sensor triggered - waiting for bottom or model detection...");
+        Serial.println("Top sensor triggered - waiting for bottom...");
     }
     
     // If top triggered but not bottom, and model detects shot, count as attempt
@@ -205,14 +202,13 @@ void checkForGoal() {
         topTriggered = false;
         shotDetectedByModel = false;
         
-        Serial.print("🎯 GOAL DETECTED! New score: ");
+        Serial.print("GOAL DETECTED! New score: ");
         Serial.println(getCurrentScore());
         
         // Send score and attempts to BLE
         String message = "{\"score\":" + String(getCurrentScore()) + 
                         ",\"pogingen\":" + String(pogingen) + 
                         ",\"type\":\"goal\"}";
-        // You'll need to modify sendScoreToBLE or create a new function
         
         sendScoreToBLE("goal");
         delay(100); // Small delay to prevent multiple detections

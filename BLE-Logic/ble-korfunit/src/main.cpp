@@ -2,6 +2,7 @@
 #include "ble_handler.h"
 #include "goal_detector.h"
 #include "ImpactDetection.h"
+#include <Wire.h>
 
 ImpactDetection impact;
 static unsigned long lastScoreSend = 0;
@@ -9,31 +10,44 @@ static unsigned long lastScoreSend = 0;
 
 void setup() {
     Serial.begin(115200);
-    delay(2000);  // Longer delay for stability
+    delay(2000);
     
-    Serial.println("\n══════════════════════════════════════");
-    Serial.println("ESP32-C3 KorfUnit - Modular Design");
-    Serial.println("══════════════════════════════════════");
+    Serial.println("Starting KorfUnit System...");
     
-    // Initialize BLE
+    // Initialize I2C once for MPU6050
+    // Use the pins defined in korfunit.h
+    Wire.setPins(MPU_SDA, MPU_SCL);
+    Wire.begin();
+    Wire.setClock(400000);  // MPU6050 works well at 400kHz
+    Wire.setTimeOut(50);    // Reasonable timeout
+    
+    Serial.println("I2C initialized for MPU6050");
+    
+    // Setup BLE
     setupBLE();
     
-    // Initialize sensors (will work even if not connected)
-    setupSensors();
-    impact.begin();
+    // Initialize MPU6050
+    // impact.begin();
+    delay(500);
     
-    Serial.println("\n✅ System Ready!");
-    Serial.println("══════════════════════════════════════\n");
+    // Initialize ToF sensors
+    // Note: ToF sensors will need their own I2C bus or reset
+    setupSensors();
+    delay(500);
+    
+    Serial.println("=== System Ready ===");
 }
 
 void loop() {
-    // Check for goals (sensor detection)
-    checkForGoal();  // This will return immediately if sensors disabled
+    // Check for basketball goals
+    checkForGoal();
     
-    // Handle BLE communication and connection health
+    // Handle BLE communication
     loopBLE();
-    impact.update();
     
-    // impact.getPogingen(getAttempts()); // To sync attempts
+    // Update MPU and run Edge Impulse inference
+    //impact.update();
+    
+    // Small delay to prevent watchdog
     delay(10);
 }

@@ -1,0 +1,7 @@
+{
+  "name": "EI_Model",
+  "version": "1.0",
+  "build": {
+    "includeDir": "."
+  }
+}

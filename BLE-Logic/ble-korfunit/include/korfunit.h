@@ -5,8 +5,11 @@
 
 // Constants shared across modules
 #define DEVICE_NAME "ESP32-BLE-Sender-1"
-#define SDA_PIN 6
-#define SCL_PIN 7
+#define MPU_SDA 5   // GPIO8
+#define MPU_SCL 6   // GPIO9
+
+#define TOF_SDA 5   // GPIO6
+#define TOF_SCL 6   // GPIO7
 #define XSHUT_TOP 2
 #define XSHUT_BOTTOM 3
 #define TRIGGER_DISTANCE 300

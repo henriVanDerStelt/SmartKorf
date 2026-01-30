@@ -22,8 +22,8 @@ private:
     int pogingen;
 
     // ================= PINS =================
-    static constexpr int ANALOG_PIN  = D0;
-    static constexpr int DIGITAL_PIN = D7;
+    static constexpr int ANALOG_PIN  = 4;
+    static constexpr int DIGITAL_PIN = 20;
 
     // ================= MPU =================
     Adafruit_MPU6050 mpu;
