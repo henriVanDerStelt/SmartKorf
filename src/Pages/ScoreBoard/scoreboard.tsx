@@ -22,44 +22,41 @@ function ScoreBoard() {
   useEffect(() => {
     devices.forEach((device) => {
       if (device.name === "CentralUnit") {
-        try {
-          // Log raw payload received from CentralUnit
-          console.log("[CentralUnit] payload received:", device.data);
-          const parsedData = JSON.parse(device.data);
-          // Log parsed object for easier debugging
-          console.log("[CentralUnit] parsed data:", parsedData);
+        // Use structured data fields directly from device object
+        console.log("[CentralUnit] device received:", { 
+          time: device.time, 
+          score: device.score, 
+          accuracy: device.accuracy, 
+          goalAttempt: device.goalAttempt 
+        });
 
-          // Sync Score
-          if (parsedData.Score && Array.isArray(parsedData.Score)) {
-            const [centralHome, centralAway] = parsedData.Score;
-            if (homeScore !== centralHome) {
-              console.log(`Syncing home score: ${homeScore} -> ${centralHome}`);
-              setHomeScore(centralHome);
-            }
-            if (awayScore !== centralAway) {
-              console.log(`Syncing away score: ${awayScore} -> ${centralAway}`);
-              setAwayScore(centralAway);
-            }
+        // Sync Score using structured field
+        if (device.score && Array.isArray(device.score)) {
+          const [centralHome, centralAway] = device.score;
+          if (homeScore !== centralHome) {
+            console.log(`Syncing home score: ${homeScore} -> ${centralHome}`);
+            setHomeScore(centralHome);
           }
-
-          // Sync Time (convert seconds to centiseconds)
-          if (parsedData.Time !== undefined) {
-            const centralTime = parsedData.Time * 100; // Convert to centiseconds
-            const timeDiff = Math.abs(timeLeft - centralTime);
-            // Only sync if difference is more than 1 second (100 centiseconds)
-            if (timeDiff > 100) {
-              console.log(`Syncing time: ${timeLeft} -> ${centralTime}`);
-              setTimeLeft(centralTime);
-            }
+          if (awayScore !== centralAway) {
+            console.log(`Syncing away score: ${awayScore} -> ${centralAway}`);
+            setAwayScore(centralAway);
           }
-        } catch (error) {
-          // Not JSON or not CentralUnit data, ignore
-          console.warn(
-            "[CentralUnit] failed to parse payload:",
-            device.data,
-            error,
-          );
         }
+
+        // Sync Time using structured field (convert seconds to centiseconds)
+        if (device.time !== undefined) {
+          const centralTime = device.time * 100; // Convert to centiseconds
+          const timeDiff = Math.abs(timeLeft - centralTime);
+          // Only sync if difference is more than 1 second (100 centiseconds)
+          if (timeDiff > 100) {
+            console.log(`Syncing time: ${timeLeft} -> ${centralTime}`);
+            setTimeLeft(centralTime);
+          }
+        }
+
+        // Future: Use accuracy and goalAttempt when needed
+        // if (device.accuracy) { ... }
+        // if (device.goalAttempt) { ... }
       }
     });
   }, [devices, homeScore, awayScore, timeLeft]);

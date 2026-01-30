@@ -17,6 +17,10 @@ interface DeviceData {
   data: string;
   rssi: number;
   connected: boolean;
+  time?: number;
+  score?: [number, number];
+  accuracy?: [number, number];
+  goalAttempt?: [number, number];
 }
 
 interface GatewayMessage {
@@ -24,6 +28,11 @@ interface GatewayMessage {
   data?: string;
   rssi?: number;
   timestamp?: number;
+  From?: string;
+  Time?: number;
+  Score?: [number, number];
+  Accuracy?: [number, number];
+  GoalAttempt?: [number, number];
 }
 
 interface EspDataContextType {
@@ -73,30 +82,68 @@ export const EspDataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Parse nested JSON in data field
-  const parseNestedJsonData = (data: string): string => {
+  const parseNestedJsonData = (data: string): { displayData: string; structuredData?: Partial<DeviceData> } => {
     try {
       // Try to parse the data as JSON
       const parsed = JSON.parse(data);
 
-      // If it has a score field, extract just the score
-      if (parsed && typeof parsed === "object" && "score" in parsed) {
-        return parsed.score.toString();
+      // Check for new JSON format with Time, Score, Accuracy, GoalAttempt
+      if (parsed && typeof parsed === "object") {
+        if ("Time" in parsed || "Score" in parsed) {
+          const structuredData: Partial<DeviceData> = {};
+          
+          if (typeof parsed.Time === "number") {
+            structuredData.time = parsed.Time;
+          }
+          
+          if (Array.isArray(parsed.Score) && parsed.Score.length === 2) {
+            structuredData.score = parsed.Score as [number, number];
+          }
+          
+          // Start of logic for Accuracy and GoalAttempt
+          if (Array.isArray(parsed.Accuracy) && parsed.Accuracy.length === 2) {
+            structuredData.accuracy = parsed.Accuracy as [number, number];
+          }
+          
+          if (Array.isArray(parsed.GoalAttempt) && parsed.GoalAttempt.length === 2) {
+            structuredData.goalAttempt = parsed.GoalAttempt as [number, number];
+          }
+          
+          // Create display string focusing on Time and Score
+          const displayParts = [];
+          if (structuredData.time !== undefined) {
+            displayParts.push(`Time: ${structuredData.time}`);
+          }
+          if (structuredData.score) {
+            displayParts.push(`Score: [${structuredData.score[0]}, ${structuredData.score[1]}]`);
+          }
+          
+          return {
+            displayData: displayParts.join(" | "),
+            structuredData
+          };
+        }
+        
+        // Legacy: If it has a score field, extract just the score
+        if ("score" in parsed) {
+          return { displayData: parsed.score.toString() };
+        }
       }
 
       // If it's just a number, return it
       if (typeof parsed === "number") {
-        return parsed.toString();
+        return { displayData: parsed.toString() };
       }
 
       // Return the original data if we can't extract a score
-      return data;
+      return { displayData: data };
     } catch (error) {
       // If it's not valid JSON, check if it's just a number
       const num = parseFloat(data);
       if (!isNaN(num)) {
-        return num.toString();
+        return { displayData: num.toString() };
       }
-      return data;
+      return { displayData: data };
     }
   };
 
@@ -179,32 +226,33 @@ export const EspDataProvider = ({ children }: { children: ReactNode }) => {
           const rssi = item.rssi ?? 0;
           const connected = true;
           const rawData = item.data ?? item.value ?? "";
-          const parsedData =
+          const parsed =
             typeof rawData === "string"
               ? parseNestedJsonData(rawData)
               : parseNestedJsonData(JSON.stringify(rawData));
 
           newDevices.set(deviceName, {
             name: deviceName,
-            data: parsedData,
+            data: parsed.displayData,
             rssi,
             connected,
+            ...parsed.structuredData,
           });
         });
         setDevices(newDevices);
         addLog(`Received device list (${jsonData.length} devices)`);
-      } else if (jsonData.sender && jsonData.data !== undefined) {
-        // Single device data received
-        const deviceName = jsonData.sender;
-
-        // Parse nested JSON in data field
-        const parsedData = parseNestedJsonData(jsonData.data as string);
-
-        const deviceData = {
+      } else if (jsonData.From && (jsonData.Time !== undefined || jsonData.Score !== undefined)) {
+        // New format: Direct structured data from CentralUnit
+        const deviceName = jsonData.From;
+        const deviceData: DeviceData = {
           name: deviceName,
-          data: parsedData,
+          data: `Time: ${jsonData.Time} | Score: [${jsonData.Score?.[0]}, ${jsonData.Score?.[1]}]`,
           rssi: jsonData.rssi || 0,
           connected: true,
+          time: jsonData.Time,
+          score: jsonData.Score,
+          accuracy: jsonData.Accuracy,
+          goalAttempt: jsonData.GoalAttempt,
         };
 
         setDevices((prev) => {
@@ -213,7 +261,29 @@ export const EspDataProvider = ({ children }: { children: ReactNode }) => {
           return newDevices;
         });
 
-        addLog(`Data from ${deviceName}: ${parsedData}`);
+        addLog(`Data from ${deviceName}: Time=${jsonData.Time}, Score=[${jsonData.Score?.[0]},${jsonData.Score?.[1]}]`);
+      } else if (jsonData.sender && jsonData.data !== undefined) {
+        // Single device data received (legacy format)
+        const deviceName = jsonData.sender;
+
+        // Parse nested JSON in data field
+        const parsed = parseNestedJsonData(jsonData.data as string);
+
+        const deviceData: DeviceData = {
+          name: deviceName,
+          data: parsed.displayData,
+          rssi: jsonData.rssi || 0,
+          connected: true,
+          ...parsed.structuredData,
+        };
+
+        setDevices((prev) => {
+          const newDevices = new Map(prev);
+          newDevices.set(deviceName, deviceData);
+          return newDevices;
+        });
+
+        addLog(`Data from ${deviceName}: ${parsed.displayData}`);
       }
     } catch (error) {
       addLog(`Error parsing data: ${error}. Raw data: ${data}`);
@@ -296,6 +366,7 @@ export const EspDataProvider = ({ children }: { children: ReactNode }) => {
         (event: Event) => {
           try {
             const value = new TextDecoder().decode((event.target as any).value);
+            console.log("🔍 RAW BLE CHUNK:", value);
             handleGatewayData(value);
           } catch (err) {
             addLog(`Error processing notification: ${err}`);
@@ -403,7 +474,7 @@ export const EspDataProvider = ({ children }: { children: ReactNode }) => {
 
 export const useEspData = () => {
   const context = useContext(EspDataContext);
-  console.log("EspDataContext:", context);
+  //console.log("EspDataContext:", context);
   if (!context) {
     throw new Error("useEspData must be used within EspDataProvider");
   }
