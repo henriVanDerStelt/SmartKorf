@@ -15,6 +15,11 @@ BLECharacteristic* pScoreChar = nullptr;
 BLECharacteristic* pDataCharacteristic = nullptr;
 bool pwaConnected = false;
 
+// Notification throttling to prevent BLE stack errors
+unsigned long lastNotifyTime = 0;
+const unsigned long NOTIFY_COOLDOWN_MS = 100;  // Minimum time between notifications
+bool isNotifying = false;
+
 std::map<std::string, std::string> teamToSender
     = { { "HOME", "ESP32-BLE-Sender-1" }, { "AWAY", "ESP32-BLE-Sender-2" } };
 
@@ -85,25 +90,32 @@ bool syncScoreToSender(const std::string& senderName, int newScore);
 // NEW FUNCTION: Send score to PWA
 void sendScoreToPWA() {
     if (!pDataCharacteristic || !pwaConnected) {
-        Serial.println("PWA not connected, skipping score update");
-        return;
+
+        return;  // Silently skip if not connected
     }
     
-    uint32_t matchTime = getRemainingTimerSeconds();
+    // Throttle notifications to prevent BLE stack overload
+    unsigned long now = millis();
+    if (isNotifying || (now - lastNotifyTime) < NOTIFY_COOLDOWN_MS) {
+        return;  // Skip if too soon after last notification
+    }
+    
+    String matchTime = getFormattedTime();  // Get time in mm:ss:msms format
     String jsonData =
         "{"
-        "\"type\":\"score_update\","
         "\"From\":\"CentralUnit\","
-        "\"Time\":" + String(matchTime) + ","
+        "\"Time\":\"" + matchTime + "\","
         "\"Score\":[" + String(homeScore) + "," + String(awayScore) + "],"
-        "\"Accuracy\":[70,65],"
         "\"GoalAttempt\":[54,48]"
         "}";
     
+    isNotifying = true;
     pDataCharacteristic->setValue((uint8_t*)jsonData.c_str(), jsonData.length());
     pDataCharacteristic->notify(true);
+    isNotifying = false;
+    lastNotifyTime = millis();
     
-    Serial.print("✅ Score sent to PWA: ");
+    Serial.print("Score sent to PWA: ");
     Serial.println(jsonData);
 }
 
@@ -114,20 +126,19 @@ void sendScoreToDisplays() {
         return;
     }
     
-    uint32_t matchTime = getRemainingTimerSeconds();
+    String matchTime = getFormattedTime();  // Get time in mm:ss:msms format
     String jsonData =
         "{"
         "\"From\":\"CentralUnit\","
-        "\"Time\":" + String(matchTime) + ","
+        "\"Time\":\"" + matchTime + "\","
         "\"Score\":[" + String(homeScore) + "," + String(awayScore) + "],"
-        "\"Accuracy\":[70,65],"
         "\"GoalAttempt\":[54,48]"
         "}";
     
     pScoreChar->setValue((uint8_t*)jsonData.c_str(), jsonData.length());
     pScoreChar->notify(true);
     
-    Serial.print("📺 Score sent to displays: ");
+    Serial.print("Score sent to displays: ");
     Serial.println(jsonData);
 }
 
@@ -144,7 +155,7 @@ void sendScoreNew() {
     lastHomeScore = homeScore;
     lastAwayScore = awayScore;
     
-    Serial.print("🔄 Score update detected: ");
+    Serial.print("Score update detected: ");
     Serial.print(homeScore);
     Serial.print(" - ");
     Serial.println(awayScore);
@@ -178,7 +189,7 @@ class GatewayServerCallbacks : public BLEServerCallbacks {
 
         String status = "disconnected";
         pStatusCharacteristic->setValue(status.c_str());
-        pStatusCharacteristic->notify();
+        // No need to notify on disconnect - client is already gone
 
         delay(500);
         pServer->startAdvertising();
@@ -191,7 +202,7 @@ bool syncScoreToSender(const std::string& senderName, int newScore)
 {
     auto itDev = senderDevices.find(senderName);
     if (itDev == senderDevices.end()) {
-        Serial.print("❌ Sender not connected: ");
+        Serial.print("Sender not connected: ");
         Serial.println(senderName.c_str());
         return false;
     }
@@ -199,45 +210,57 @@ bool syncScoreToSender(const std::string& senderName, int newScore)
     SenderDevice* sender = itDev->second;
 
     if (!sender->connected || sender->rxCharacteristic == nullptr) {
-        Serial.print("❌ Sender not ready for commands: ");
+        Serial.print("Sender not ready for commands: ");
         Serial.println(senderName.c_str());
         return false;
     }
 
     // Build JSON command
     String command = "{\"command\":\"set_score\",\"score\":" + String(newScore) + "}";
-    Serial.print("📤 Syncing score to ");
-    Serial.print(senderName.c_str());
-    Serial.print(": ");
+    
+    // DEBUG: Print the full command
+    Serial.print("Full command to send: ");
     Serial.println(command);
-
-    // Send in chunks
-    const int chunkSize = 20;  // safe default for BLE
+    Serial.print("Command length: ");
+    Serial.println(command.length());
+    
+    const int chunkSize = 20;
     bool success = true;
 
     for (int i = 0; i < command.length(); i += chunkSize) {
         int len = min(chunkSize, (int)(command.length() - i));
+        
+        // Add delay between chunks (except first)
+        if (i > 0) {
+            delay(50); // Increased delay
+        }
+        
         bool ok = sender->rxCharacteristic->writeValue(
             (uint8_t*)(command.c_str() + i),
             len,
-            false  // no response
+            false
         );
-
+        
         if (!ok) {
-            Serial.println("❌ Failed to send chunk");
+            Serial.println("Failed to send chunk");
             success = false;
             break;
         }
-
-        delay(5); // small delay to avoid overwhelming BLE stack
+        
+        Serial.print("Sent chunk ");
+        Serial.print(i / chunkSize + 1);
+        Serial.print("/");
+        Serial.println((command.length() + chunkSize - 1) / chunkSize);
+        
+        delay(10); // Small delay after sending
     }
 
     // Send score update to PWA and displays
     if (success) {
         sendScoreNew();
-        Serial.println("✅ Score sync sent and broadcasted");
+        Serial.println("Score sync sent and broadcasted");
     } else {
-        Serial.println("❌ Score sync failed");
+        Serial.println("Score sync failed");
     }
 
     return success;
@@ -295,7 +318,42 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
                 changeNames(newHome, newAway);
                 return;
             } else if (cmd == "TIME") {
-                Serial.println("Change time command received");
+                // Handle both string and array formats for Value
+                String action = "";
+                
+                if (doc["Value"].is<JsonArray>()) {
+                    JsonArray values = doc["Value"];
+                    if (values.size() < 1) {
+                        Serial.println("TIME requires Value");
+                        return;
+                    }
+                    action = values[0].as<String>();
+                } else if (doc["Value"].is<const char*>() || doc["Value"].is<String>()) {
+                    action = doc["Value"].as<String>();
+                } else {
+                    Serial.println("TIME requires Value as string or array");
+                    return;
+                }
+                
+                action.toUpperCase();
+                
+                if (action == "START") {
+                    timerStart();
+                    Serial.println("Timer STARTED");
+                } else if (action == "STOP") {
+                    timerStop();
+                    Serial.println("Timer STOPPED");
+                } else if (action == "RESET") {
+                    timerReset();
+                    Serial.println("Timer RESET");
+                } else {
+                    Serial.print("Invalid TIME action: ");
+                    Serial.println(action);
+                    return;
+                }
+                
+                // Send updated time to PWA immediately
+                sendScoreToPWA();
                 return;
             } else if (cmd == "SCORE") {
                 JsonArray values = doc["Value"];
@@ -352,7 +410,7 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
                 if (it != teamToSender.end()) {
                     const std::string& senderName = it->second;
 
-                    Serial.print("🔁 Syncing score to sender: ");
+                    Serial.print("Syncing score to sender: ");
                     Serial.println(senderName.c_str());
 
                     gSync.senderName = senderName;
@@ -362,7 +420,7 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
 
                     Serial.println("Queued score sync (will send in loop)");
                 } else {
-                    Serial.print("❌ No sender mapping found for team: ");
+                    Serial.print("No sender mapping found for team: ");
                     Serial.println(teamStr);
                 }
 
@@ -384,8 +442,13 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
 void sendDeviceListToPWA()
 {
     if (!pwaConnected || !pDataCharacteristic) {
-        Serial.println("Cannot send device list: PWA not connected");
         return;
+    }
+
+    // Throttle notifications to prevent BLE stack overload
+    unsigned long now = millis();
+    if (isNotifying || (now - lastNotifyTime) < NOTIFY_COOLDOWN_MS) {
+        return;  // Skip if too soon after last notification
     }
 
     String deviceList = "[";
@@ -413,29 +476,37 @@ void sendDeviceListToPWA()
         deviceList += "\"lastUpdate\":" + String(timeSinceUpdate);
         deviceList += "}";
 
-        Serial.print("Device ");
-        Serial.print(devicePair.first.c_str());
-        Serial.print(" - Status: ");
-        Serial.print(status);
-        Serial.print(", Data: ");
-        Serial.println(devicePair.second->lastData);
+        // Serial.print("Device ");
+        // Serial.print(devicePair.first.c_str());
+        // Serial.print(" - Status: ");
+        // Serial.print(status);
+        // Serial.print(", Data: ");
+        // Serial.println(devicePair.second->lastData);
     }
 
     deviceList += "]";
 
+    isNotifying = true;
     pDataCharacteristic->setValue(deviceList.c_str());
     pDataCharacteristic->notify();
+    isNotifying = false;
+    lastNotifyTime = millis();
 
-    Serial.print("Sent device list to PWA: ");
-    Serial.println(deviceList);
+    // Serial.print("Sent device list to PWA: ");
+    // Serial.println(deviceList);
 }
 
 // Send sensor data to PWA
 void sendSensorDataToPWA(const std::string& senderName, const String& data, int rssi)
 {
     if (!pwaConnected || !pDataCharacteristic) {
-        Serial.println("Cannot send data: PWA not connected");
-        return;
+        return;  // Silently skip if not connected
+    }
+
+    // Throttle notifications to prevent BLE stack overload
+    unsigned long now = millis();
+    if (isNotifying || (now - lastNotifyTime) < NOTIFY_COOLDOWN_MS) {
+        return;  // Skip if too soon after last notification
     }
 
     String jsonData = "{";
@@ -445,10 +516,13 @@ void sendSensorDataToPWA(const std::string& senderName, const String& data, int 
     jsonData += "\"timestamp\":" + String(millis());
     jsonData += "}";
 
+    isNotifying = true;
     pDataCharacteristic->setValue(jsonData.c_str());
     pDataCharacteristic->notify();
+    isNotifying = false;
+    lastNotifyTime = millis();
 
-    Serial.print("📤 To PWA: ");
+    Serial.print("To PWA: ");
     Serial.println(jsonData);
 }
 
@@ -556,8 +630,8 @@ static void senderNotificationCallback(
 
     // Check if this is a ping (ignore ping messages)
     if (receivedData.indexOf("\"status\":\"ping\"") != -1) {
-        Serial.print("📡 Ping from ");
-        Serial.println(senderName.c_str());
+        // Serial.print("Ping from ");
+        // Serial.println(senderName.c_str());
         return;
     }
 
@@ -601,7 +675,7 @@ void forceReconnect(const std::string& deviceName)
 
     SenderDevice* device = senderDevices[deviceName];
 
-    Serial.print("🔄 Forcing reconnection for ");
+    Serial.print("Forcing reconnection for ");
     Serial.println(deviceName.c_str());
 
     if (device->client) {
@@ -630,7 +704,7 @@ void forceReconnect(const std::string& deviceName)
         connectionHealthMap[deviceName].lastDataTime = millis();
     }
 
-    Serial.print("🧹 Cleaned up connection for ");
+    Serial.print("Cleaned up connection for ");
     Serial.println(deviceName.c_str());
 }
 
@@ -863,7 +937,7 @@ void monitorConnections()
                 health.missedPings++;
 
                 if (health.missedPings > 2) {
-                    Serial.print("⚠️ No data from ");
+                    Serial.print("No data from ");
                     Serial.print(name.c_str());
                     Serial.print(" for ");
                     Serial.print(timeSinceData / 1000);
@@ -890,7 +964,7 @@ void cleanupStaleConnections()
         SenderDevice* device = it->second;
 
         if (!device->connected && (currentTime - device->lastUpdate > 60000)) {
-            Serial.print("🧹 Removing stale device: ");
+            Serial.print("Removing stale device: ");
             Serial.println(it->first.c_str());
 
             if (device->client) {
@@ -947,7 +1021,7 @@ void setupScoreBoardBLE() {
     pScoreChar->addDescriptor(new BLE2902());
     pScoreService->start();
     
-    Serial.println("✅ ScoreBoard BLE Service started");
+    Serial.println("ScoreBoard BLE Service started");
 }
 
 // Setup BLE Gateway
@@ -997,7 +1071,7 @@ void setupBLEGateway()
 
     BLEDevice::startAdvertising();
 
-    Serial.println("\n✅ BLE Gateway READY for PWA");
+    Serial.println("\nBLE Gateway READY for PWA");
     Serial.print("Device Name: ");
     Serial.println(DEVICE_NAME);
     Serial.print("Gateway Service UUID: ");
@@ -1064,12 +1138,19 @@ void handleBluetooth()
         lastDeviceListTime = millis();
     }
 
+    // Send timer updates to PWA periodically (every 1 second when connected)
+    static unsigned long lastTimerUpdateTime = 0;
+    if (pwaConnected && millis() - lastTimerUpdateTime >= 1000) {
+        sendScoreToPWA();  // This sends score AND timer
+        lastTimerUpdateTime = millis();
+    }
+
     // Handle score sync to senders
     if (gSyncPending && gSync.pending) {
         gSyncPending = false;
         gSync.pending = false;
 
-        Serial.print("🚀 Sending queued score sync to ");
+        Serial.print("Sending queued score sync to ");
         Serial.print(gSync.senderName.c_str());
         Serial.print(" score=");
         Serial.println(gSync.score);

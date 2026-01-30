@@ -61,19 +61,21 @@ static const uint32_t TIMER_TOTAL_MS = 30UL * 60UL * 1000UL;
 
 static uint32_t g_timerStartMs = 0;     // "virtual start" time
 static uint32_t g_timerPausedAtMs = 0;  // when pause was pressed
-static bool     g_timerPaused = false;
+static bool     g_timerPaused = true;   // Start paused, wait for PWA command
 static bool     g_timerInit = false;
+static bool     g_timerStarted = false; // Track if timer has been started
 
 static void timerEnsureInit() {
   if (!g_timerInit) {
     g_timerStartMs = millis();
-    g_timerPaused = false;
+    g_timerPaused = true;  // Start paused
+    g_timerPausedAtMs = g_timerStartMs;
     g_timerInit = true;
   }
 }
 
-// returns remaining seconds (0..)
-uint32_t getRemainingTimerSeconds() {
+// returns remaining milliseconds
+uint32_t getRemainingTimerMs() {
   timerEnsureInit();
 
   uint32_t now = millis();
@@ -81,7 +83,73 @@ uint32_t getRemainingTimerSeconds() {
                                    : (now - g_timerStartMs);
 
   if (elapsed >= TIMER_TOTAL_MS) return 0;
-  return (TIMER_TOTAL_MS - elapsed) / 1000UL;
+  return TIMER_TOTAL_MS - elapsed;
+}
+
+// returns remaining seconds (0..)
+uint32_t getRemainingTimerSeconds() {
+  return getRemainingTimerMs() / 1000UL;
+}
+
+// Format time as mm:ss:msms
+String getFormattedTime() {
+  uint32_t totalMs = getRemainingTimerMs();
+  
+  uint32_t minutes = totalMs / 60000;
+  uint32_t seconds = (totalMs % 60000) / 1000;
+  uint32_t milliseconds = totalMs % 1000;
+  
+  String result = "";
+  if (minutes < 10) result += "0";
+  result += String(minutes);
+  result += ":";
+  if (seconds < 10) result += "0";
+  result += String(seconds);
+  result += ":";
+  if (milliseconds < 100) result += "0";
+  if (milliseconds < 10) result += "0";
+  result += String(milliseconds);
+  
+  return result;
+}
+
+// Start the timer
+void timerStart() {
+  timerEnsureInit();
+  
+  Serial.print("timerStart called - currently paused: ");
+  Serial.println(g_timerPaused);
+  
+  if (g_timerPaused) {
+    if (!g_timerStarted) {
+      // First time starting
+      g_timerStartMs = millis();
+      g_timerStarted = true;
+      Serial.println("Timer started for the first time");
+    } else {
+      // Resuming from pause
+      uint32_t now = millis();
+      uint32_t pausedDuration = now - g_timerPausedAtMs;
+      g_timerStartMs += pausedDuration;
+      Serial.print("Timer resumed, paused duration: ");
+      Serial.print(pausedDuration);
+      Serial.println("ms");
+    }
+    g_timerPaused = false;
+    Serial.println("Timer is now running");
+  } else {
+    Serial.println("Timer was already running");
+  }
+}
+
+// Stop (pause) the timer
+void timerStop() {
+  timerEnsureInit();
+  
+  if (!g_timerPaused) {
+    g_timerPaused = true;
+    g_timerPausedAtMs = millis();
+  }
 }
 
 // Pause or resume
@@ -112,9 +180,10 @@ bool timerIsPaused() {
 
 // Reset back to full duration
 void timerReset() {
-  g_timerStartMs = millis();   // start counting from NOW
-  g_timerPausedAtMs = 0;
-  g_timerPaused = false;
+  g_timerStartMs = millis();
+  g_timerPausedAtMs = g_timerStartMs;
+  g_timerPaused = true;  // Reset to paused state
+  g_timerStarted = false;
   g_timerInit = true;
 }
 

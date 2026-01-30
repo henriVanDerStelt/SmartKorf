@@ -28,6 +28,8 @@ extern int awayScore;
 
 // Function declarations
 uint32_t getRemainingTimerSeconds();
+uint32_t getRemainingTimerMs();  // Returns remaining time in milliseconds
+String getFormattedTime();  // Returns time in mm:ss:msms format
 void websiteSetup();
 void scoreChange(int score, int who);
 void sendScoreNew();  // This will now be implemented in website.cpp
@@ -36,6 +38,8 @@ void sendScoreToPWA(); // Helper function to send to PWA
 void changeNames(String newHome, String newAway);
 void bleInit();
 void handleBluetooth();
+void timerStart();
+void timerStop();
 void timerReset();
 void timerPause(bool);
 void timerTogglePause();
