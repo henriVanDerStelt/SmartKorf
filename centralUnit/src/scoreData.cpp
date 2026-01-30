@@ -37,6 +37,18 @@ void scoreChange(int score, int who) {
   if (awayScore > 99) awayScore = 99;
 }
 
+void scoreButton(int who, int change) {
+  if (who == 1) { // home team
+    homeScore += change;
+    if (homeScore < 0) homeScore = 0;
+  } else if (who == 2) { // away team
+    awayScore += change;
+    if (awayScore < 0) awayScore = 0;
+  } else {
+    // unknown team, ignore
+    return;
+  }
+}
 
 // Website.cpp will handle the actual BLE sending
 void sendScore() {

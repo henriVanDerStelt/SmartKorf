@@ -32,6 +32,7 @@ uint32_t getRemainingTimerMs();  // Returns remaining time in milliseconds
 String getFormattedTime();  // Returns time in mm:ss:msms format
 void websiteSetup();
 void scoreChange(int score, int who);
+void scoreButton(int who, int change);
 void sendScoreNew();  // This will now be implemented in website.cpp
 void sendScoreToPWA(); // Helper function to send to PWA
 
@@ -42,6 +43,7 @@ void timerStart();
 void timerStop();
 void timerReset();
 void timerPause(bool);
+bool timerIsPaused();
 void timerTogglePause();
 void setupScoreBoardBLE();
 
