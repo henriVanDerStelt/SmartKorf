@@ -33,6 +33,30 @@
     -ms-user-select: none;
 }
 
+.half-and-time {
+    display: flex;
+    align-items: baseline;
+    gap: 2rem;
+}
+
+.half-indicator {
+    border-radius: 10px;
+    background: rgb(143, 193, 255);
+    padding: 0.3rem 0.8rem;
+    margin-bottom: 0.3rem;
+}
+
+.half-and-time h3 {
+    font-size: 1.5rem;
+    font-weight: var(--font-weight-medium);
+    color: #fff;
+    margin: 0;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
 .time-expired {
     color: #ff4444;
     animation: pulse 1s ease-in-out infinite;

@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from "react";
 import "./timer.css";
 import { supabase } from "../../supabaseClient";
 import { useUser } from "@clerk/clerk-react";
-import { useTime } from "../../Hooks/Commands";
+import { useTime, useHalfTime } from "../../Hooks/Commands";
 
-const TIMER_DURATION = 30; // time in minutes
+export const TIMER_DURATION = 0.5; // time in minutes
 
 interface TimerProps {
   timeLeft: number;
@@ -13,6 +13,11 @@ interface TimerProps {
   setIsRunning: (running: boolean) => void;
   currentGameId: string | null;
   setCurrentGameId: (id: string | null) => void;
+  onResetScores?: () => void;
+}
+
+interface HalfIndication {
+  half: string;
 }
 
 function Timer({
@@ -22,12 +27,15 @@ function Timer({
   setIsRunning,
   currentGameId,
   setCurrentGameId,
+  onResetScores,
 }: TimerProps) {
   const { user } = useUser();
   const { start: sendStart, stop: sendStop, reset: sendReset } = useTime();
+  const { setHalfTime: sendHalfTime } = useHalfTime();
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const pausedTimeRef = useRef<number>(TIMER_DURATION * 60 * 100);
+  const [half, setHalf] = useState<"1st" | "2nd">("1st");
 
   useEffect(() => {
     if (isRunning && timeLeft > 0) {
@@ -44,8 +52,8 @@ function Timer({
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
           }
-          // Stuur end_time naar database
-          if (currentGameId) {
+          // Only finish game if it's the end of 2nd half
+          if (half === "2nd" && currentGameId) {
             finishGame();
           }
         } else {
@@ -63,7 +71,7 @@ function Timer({
         clearInterval(intervalRef.current);
       }
     };
-  }, [isRunning, currentGameId]);
+  }, [isRunning, currentGameId, half]);
 
   const formatTime = (centiseconds: number) => {
     const totalSeconds = Math.floor(centiseconds / 100);
@@ -93,7 +101,24 @@ function Timer({
   const handleReset = () => {
     setIsRunning(false);
     setTimeLeft(TIMER_DURATION * 60 * 100);
+    // If we're in 1st half and timer is at 0, switch to 2nd half
+    if (half === "1st" && timeLeft === 0) {
+      sendHalfTime(true);
+      setHalf("2nd");
+    }
+    // If we're in 2nd half, reset scores and go back to 1st half
+    else if (half === "2nd") {
+      if (onResetScores) {
+        sendHalfTime(false);
+        onResetScores();
+      }
+      setHalf("1st");
+    }
     sendReset();
+  };
+
+  const toggleHalf = () => {
+    setHalf(half === "1st" ? "2nd" : "1st");
   };
 
   const finishGame = async () => {
@@ -156,9 +181,18 @@ function Timer({
 
   return (
     <div className="timer-container">
-      <h2 className={`time ${timeLeft === 0 ? "time-expired" : ""}`}>
-        {formatTime(timeLeft)}
-      </h2>
+      <div className="half-and-time">
+        <div
+          className="half-indicator"
+          onClick={toggleHalf}
+          style={{ cursor: "pointer" }}
+        >
+          <h3>{half}</h3>
+        </div>
+        <h2 className={`time ${timeLeft === 0 ? "time-expired" : ""}`}>
+          {formatTime(timeLeft)}
+        </h2>
+      </div>
       <div className="timer-buttons">
         <button
           className="timer-button start"

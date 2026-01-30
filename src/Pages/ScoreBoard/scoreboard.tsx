@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from "react";
 import "./scoreboard.css";
 import ScoreCounter from "../../Components/ScoreCounter/scorecounter";
-import Timer from "../../Components/Timer/timer";
+import Timer, { TIMER_DURATION } from "../../Components/Timer/timer";
 import { useEspData } from "../../Contexts/EspDataContext";
 import { useCommandReceiver } from "../../Hooks/useCommandReceiver";
 import { supabase } from "../../supabaseClient";
-
-const TIMER_DURATION = 30; // time in minutes
 
 function ScoreBoard() {
   const { devices } = useEspData();
@@ -23,11 +21,11 @@ function ScoreBoard() {
     devices.forEach((device) => {
       if (device.name === "CentralUnit") {
         // Use structured data fields directly from device object
-        console.log("[CentralUnit] device received:", { 
-          time: device.time, 
-          score: device.score, 
-          accuracy: device.accuracy, 
-          goalAttempt: device.goalAttempt 
+        console.log("[CentralUnit] device received:", {
+          time: device.time,
+          score: device.score,
+          accuracy: device.accuracy,
+          goalAttempt: device.goalAttempt,
         });
 
         // Sync Score using structured field
@@ -128,6 +126,11 @@ function ScoreBoard() {
     updateTeamName("away", name);
   };
 
+  const handleResetScores = () => {
+    setHomeScore(0);
+    setAwayScore(0);
+  };
+
   return (
     <div className="Scoreboard-page">
       <div className="scoreboard-container">
@@ -175,6 +178,7 @@ function ScoreBoard() {
           setIsRunning={setIsTimerRunning}
           currentGameId={currentGameId}
           setCurrentGameId={setCurrentGameId}
+          onResetScores={handleResetScores}
         />
       </div>
     </div>

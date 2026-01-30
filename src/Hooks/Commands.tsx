@@ -12,11 +12,15 @@ type Command =
   | {
       Command: "SCORE";
       Value: [string, "INCREMENT" | "DECREMENT"];
+    }
+  | {
+      Command: "HALFTIME";
+      Value: boolean;
     };
 
 const sendCommand = (
   command: Command,
-  sendMessage: (message: string) => Promise<void>
+  sendMessage: (message: string) => Promise<void>,
 ) => {
   const jsonCommand = JSON.stringify(command);
   console.log("Sending command:", jsonCommand);
@@ -87,4 +91,18 @@ export const useScore = () => {
   };
 
   return { updateScore, increment, decrement };
+};
+
+export const useHalfTime = () => {
+  const { sendCommand: sendEspCommand } = useEspData();
+
+  const setHalfTime = (boolean: boolean) => {
+    const command: Command = {
+      Command: "HALFTIME",
+      Value: boolean,
+    };
+    sendCommand(command, sendEspCommand);
+  };
+
+  return { setHalfTime };
 };
