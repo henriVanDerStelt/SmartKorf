@@ -19,6 +19,7 @@ bool pwaConnected = false;
 unsigned long lastNotifyTime = 0;
 const unsigned long NOTIFY_COOLDOWN_MS = 100;  // Minimum time between notifications
 bool isNotifying = false;
+std::map<std::string, String> senderMessageBuffers;
 
 std::map<std::string, std::string> teamToSender
     = { { "HOME", "ESP32-BLE-Sender-1" }, { "AWAY", "ESP32-BLE-Sender-2" } };
@@ -27,10 +28,28 @@ struct PendingScoreSync {
     bool pending = false;
     std::string senderName;
     int score = 0;
+    int attempts = 0;
 };
 
 volatile bool gSyncPending = false;
 PendingScoreSync gSync;
+
+// Halftime state machine
+enum HalftimeState {
+    HALFTIME_IDLE,
+    HALFTIME_WAITING_DATA,
+    HALFTIME_READY_TO_SWAP
+};
+
+struct HalftimeProcess {
+    HalftimeState state = HALFTIME_IDLE;
+    unsigned long requestTime = 0;
+    bool sender1Responded = false;
+    bool sender2Responded = false;
+    const unsigned long TIMEOUT_MS = 2000;  // 2 second timeout
+};
+
+HalftimeProcess gHalftime;
 
 // Structure for connected sender devices
 struct SenderDevice {
@@ -86,6 +105,9 @@ void forceReconnect(const std::string& deviceName);
 void cleanupStaleConnections();
 void monitorConnections();
 bool syncScoreToSender(const std::string& senderName, int newScore);
+void processSenderData(const std::string& senderName, const String& jsonData);
+void requestDataFromSenders();
+void swapHomeAwayMapping(bool resetScores);
 
 // NEW FUNCTION: Send score to PWA
 void sendScoreToPWA() {
@@ -106,7 +128,7 @@ void sendScoreToPWA() {
         "\"From\":\"CentralUnit\","
         "\"Time\":\"" + matchTime + "\","
         "\"Score\":[" + String(homeScore) + "," + String(awayScore) + "],"
-        "\"GoalAttempt\":[54,48]"
+        "\"GoalAttempt\":[" + String(homeAttempts) + "," + String(awayAttempts) + "]"
         "}";
     
     isNotifying = true;
@@ -115,8 +137,8 @@ void sendScoreToPWA() {
     isNotifying = false;
     lastNotifyTime = millis();
     
-    Serial.print("Score sent to PWA: ");
-    Serial.println(jsonData);
+    // Serial.print("Score sent to PWA: ");
+    // Serial.println(jsonData);
 }
 
 // NEW FUNCTION: Send score to displays (LED scoreboards)
@@ -132,7 +154,7 @@ void sendScoreToDisplays() {
         "\"From\":\"CentralUnit\","
         "\"Time\":\"" + matchTime + "\","
         "\"Score\":[" + String(homeScore) + "," + String(awayScore) + "],"
-        "\"GoalAttempt\":[54,48]"
+        "\"GoalAttempt\":[" + String(homeAttempts) + "," + String(awayAttempts) + "]"
         "}";
     
     pScoreChar->setValue((uint8_t*)jsonData.c_str(), jsonData.length());
@@ -198,7 +220,7 @@ class GatewayServerCallbacks : public BLEServerCallbacks {
 };
 
 // Stuur score sync commando naar sender
-bool syncScoreToSender(const std::string& senderName, int newScore)
+bool syncScoreToSender(const std::string& senderName, int newScore, int newAttempts)
 {
     auto itDev = senderDevices.find(senderName);
     if (itDev == senderDevices.end()) {
@@ -215,8 +237,8 @@ bool syncScoreToSender(const std::string& senderName, int newScore)
         return false;
     }
 
-    // Build JSON command
-    String command = "{\"command\":\"set_score\",\"score\":" + String(newScore) + "}";
+    // Build JSON command with score AND attempts
+    String command = "{\"command\":\"set_score\",\"score\":" + String(newScore) + ",\"pogingen\":" + String(newAttempts) + "}";
     
     // DEBUG: Print the full command
     Serial.print("Full command to send: ");
@@ -255,15 +277,104 @@ bool syncScoreToSender(const std::string& senderName, int newScore)
         delay(10); // Small delay after sending
     }
 
-    // Send score update to PWA and displays
     if (success) {
-        sendScoreNew();
-        Serial.println("Score sync sent and broadcasted");
+        Serial.println("Score sync sent successfully");
     } else {
         Serial.println("Score sync failed");
     }
 
     return success;
+}
+
+// Request latest data from all sender units
+void requestDataFromSenders() {
+    Serial.println("Requesting latest data from all sender units...");
+    
+    for (auto& devicePair : senderDevices) {
+        std::string senderName = devicePair.first;
+        SenderDevice* sender = devicePair.second;
+        
+        if (!sender->connected || !sender->rxCharacteristic) {
+            Serial.print("Skipping ");
+            Serial.print(senderName.c_str());
+            Serial.println(" - not connected");
+            continue;
+        }
+        Serial.print("Requesting data from ");
+        Serial.println(senderName.c_str());
+        // Send request command in chunks
+        String command = "{\"command\":\"get_data\"}";
+        const int chunkSize = 20;
+        bool success = true;
+        
+        for (int i = 0; i < command.length(); i += chunkSize) {
+            int len = min(chunkSize, (int)(command.length() - i));
+            
+            if (i > 0) {
+                delay(50);
+            }
+            
+            bool ok = sender->rxCharacteristic->writeValue(
+                (uint8_t*)(command.c_str() + i),
+                len,
+                false
+            );
+            
+            if (!ok) {
+                success = false;
+                break;
+            }
+            
+            delay(10);
+        }
+        
+        if (success) {
+            Serial.println("Data request sent");
+        } else {
+            Serial.println("Failed to send data request");
+        }
+        
+        delay(50);
+    }
+}
+
+// Swap home and away team mapping
+void swapHomeAwayMapping(bool resetScores) {
+    Serial.println("Swapping HOME and AWAY unit mapping...");
+    
+    // Swap the mapping
+    std::string temp = teamToSender["HOME"];
+    teamToSender["HOME"] = teamToSender["AWAY"];
+    teamToSender["AWAY"] = temp;
+    
+    Serial.print("New mapping: HOME -> ");
+    Serial.print(teamToSender["HOME"].c_str());
+    Serial.print(", AWAY -> ");
+    Serial.println(teamToSender["AWAY"].c_str());
+    
+    if (resetScores) {
+        // Swap scores and attempts
+        int tempScore = homeScore;
+        homeScore = awayScore;
+        awayScore = tempScore;
+        
+        int tempAttempts = homeAttempts;
+        homeAttempts = awayAttempts;
+        awayAttempts = tempAttempts;
+        
+        Serial.println("♻️ Scores and attempts swapped");
+        
+        // Reset scores to 0
+        homeScore = 0;
+        awayScore = 0;
+        homeAttempts = 0;
+        awayAttempts = 0;
+        
+        Serial.println("🔄 Scores and attempts reset to 0");
+    }
+    
+    // Send updated state to PWA
+    sendScoreNew();
 }
 
 // Callback for commands from PWA
@@ -355,6 +466,81 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
                 // Send updated time to PWA immediately
                 sendScoreToPWA();
                 return;
+            } else if (cmd == "HALFTIME") {
+                // Handle both boolean and string formats for Value
+                bool isHalftime = false;
+                
+                if (doc["Value"].is<bool>()) {
+                    isHalftime = doc["Value"].as<bool>();
+                } else if (doc["Value"].is<const char*>() || doc["Value"].is<String>()) {
+                    String val = doc["Value"].as<String>();
+                    val.toLowerCase();
+                    isHalftime = (val == "true" || val == "1");
+                } else {
+                    Serial.println("HALFTIME requires Value as boolean");
+                    return;
+                }
+                
+                Serial.print("HALFTIME command received: ");
+                Serial.println(isHalftime ? "true" : "false");
+                
+                if (isHalftime) {
+                    // First request current data from all units
+                    Serial.println("🔄 Requesting current data before halftime...");
+                    // requestDataFromSenders();
+                    // delay(1000); // Wait for responses
+                    
+                    // Swap home and away mapping WITHOUT resetting gateway scores
+                    // Gateway keeps: HOME score = 5, AWAY score = 3 (example)
+                    swapHomeAwayMapping(false);
+                    
+                    // Reset timer for second half
+                    timerReset();
+                    
+                    Serial.println("⚽ HALFTIME: Units swapped, gateway scores maintained, timer reset");
+                    
+                    // Units need the score of their NEW side
+                    // Unit-1 (now AWAY) gets AWAY score, Unit-2 (now HOME) gets HOME score
+                    syncScoreToSender(teamToSender["HOME"], homeScore, homeAttempts);
+                    delay(100);
+                    syncScoreToSender(teamToSender["AWAY"], awayScore, awayAttempts);
+                    
+                    Serial.println("📤 Synced scores to swapped units");
+                } else {
+                    // End of match - request data and reset everything
+                    requestDataFromSenders();
+                    delay(500); // Wait for responses
+                    
+                    // Send final data to PWA
+                    sendScoreToPWA();
+                    delay(100);
+                    
+                    // Reset everything
+                    homeScore = 0;
+                    awayScore = 0;
+                    homeAttempts = 0;
+                    awayAttempts = 0;
+                    
+                    // Restore original mapping (1=HOME, 2=AWAY)
+                    teamToSender["HOME"] = "ESP32-BLE-Sender-1";
+                    teamToSender["AWAY"] = "ESP32-BLE-Sender-2";
+                    
+                    // Reset timer
+                    timerReset();
+                    
+                    Serial.println("END OF MATCH: All data reset, mapping restored");
+                    
+                    // Sync reset scores AND attempts to korfbal units (back to original mapping)
+                    syncScoreToSender(teamToSender["HOME"], homeScore, homeAttempts);
+                    delay(100);
+                    syncScoreToSender(teamToSender["AWAY"], awayScore, awayAttempts);
+                    
+                    Serial.println("Synced reset scores and attempts to units");
+                }
+                
+                // Send updated state to PWA
+                sendScoreToPWA();
+                return;
             } else if (cmd == "SCORE") {
                 JsonArray values = doc["Value"];
 
@@ -413,8 +599,12 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
                     Serial.print("Syncing score to sender: ");
                     Serial.println(senderName.c_str());
 
+                    // Determine which attempts to send
+                    int attempts = (teamStr == "HOME") ? homeAttempts : awayAttempts;
+                    
                     gSync.senderName = senderName;
                     gSync.score = *scorePtr;
+                    gSync.attempts = attempts;
                     gSync.pending = true;
                     gSyncPending = true;
 
@@ -623,47 +813,140 @@ static void senderNotificationCallback(
         senderDevices[senderName]->lastDataTime = currentTime;
     }
 
-    String receivedData = "";
+     String receivedData = "";
     for (int i = 0; i < length; i++) {
         receivedData += (char)pData[i];
     }
-
+    
     // Check if this is a ping (ignore ping messages)
     if (receivedData.indexOf("\"status\":\"ping\"") != -1) {
         // Serial.print("Ping from ");
         // Serial.println(senderName.c_str());
         return;
     }
-
+    
     Serial.print("From ");
     Serial.print(senderName.c_str());
-    Serial.print(" (RSSI: ");
-    Serial.print(rssi);
-    Serial.print(" dBm): ");
+    Serial.print(": ");
     Serial.println(receivedData.c_str());
-
-    String scoreStr = extractScoreFromData(receivedData);
-
-    if (senderDevices.find(senderName) != senderDevices.end()) {
-        senderDevices[senderName]->lastData = scoreStr;
-        senderDevices[senderName]->lastUpdate = currentTime;
-        senderDevices[senderName]->lastDataTime = currentTime;
-
-        Serial.print("Updated ");
+    
+    // Add to buffer for this sender
+    if (senderMessageBuffers.find(senderName) == senderMessageBuffers.end()) {
+        senderMessageBuffers[senderName] = "";
+    }
+    
+    senderMessageBuffers[senderName] += receivedData;
+    
+    // Check if we have a complete JSON message
+    String& buffer = senderMessageBuffers[senderName];
+    
+    // Look for complete JSON object
+    int start = buffer.indexOf('{');
+    int end = buffer.lastIndexOf('}');
+    
+    if (start != -1 && end != -1 && end > start) {
+        String completeJson = buffer.substring(start, end + 1);
+        
+        // Process the complete JSON
+        processSenderData(senderName, completeJson);
+        
+        // Remove processed part from buffer
+        if (end + 1 < buffer.length()) {
+            buffer = buffer.substring(end + 1);
+        } else {
+            buffer = "";
+        }
+    }
+    
+    // Clean up buffer if it gets too large
+    if (buffer.length() > 500) {
+        Serial.print("Buffer too large for ");
         Serial.print(senderName.c_str());
-        Serial.print(" score to: ");
-        Serial.println(scoreStr);
+        Serial.println(", clearing");
+        buffer = "";
     }
+}
 
-    int sender = 0;
-    if (senderName == "ESP32-BLE-Sender-1") {
-        sender = 1;
-    } else if (senderName == "ESP32-BLE-Sender-2") {
-        sender = 2;
+// Helper function to process complete JSON data
+void processSenderData(const std::string& senderName, const String& jsonData) {
+    Serial.print("Processing complete JSON from ");
+    Serial.print(senderName.c_str());
+    Serial.print(": ");
+    Serial.println(jsonData);
+    
+    // Parse JSON
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, jsonData);
+    
+    if (err) {
+        Serial.print("JSON parse error: ");
+        Serial.println(err.c_str());
+        return;
     }
-
-    sendSensorDataToPWA(senderName, scoreStr, rssi);
-    scoreChange(scoreStr.toInt(), sender);
+    
+    // Check message type (init, update, etc.)
+    if (doc["type"].is<const char*>()) {
+        const char* msgType = doc["type"];
+        Serial.print("Message type: ");
+        Serial.println(msgType);
+        
+        if (strcmp(msgType, "init") == 0) {
+            Serial.print("🔌 ");
+            Serial.print(senderName.c_str());
+            Serial.println(" sent initial connection data");
+        }
+    }
+    
+    // Check status field
+    if (doc["status"].is<const char*>()) {
+        const char* status = doc["status"];
+        Serial.print("Status: ");
+        Serial.println(status);
+    }
+    
+    // Extract score
+    if (doc["score"].is<int>()) {
+        String scoreStr = String(doc["score"].as<int>());
+        int attempts = 0;
+        
+        // Extract pogingen (attempts) if present
+        if (doc["pogingen"].is<int>()) {
+            attempts = doc["pogingen"].as<int>();
+            Serial.print("Extracted attempts: ");
+            Serial.println(attempts);
+            gSync.attempts = attempts;
+        }
+        
+        // Update device data
+        if (senderDevices.find(senderName) != senderDevices.end()) {
+            senderDevices[senderName]->lastData = scoreStr;
+            senderDevices[senderName]->lastUpdate = millis();
+            senderDevices[senderName]->lastDataTime = millis();
+            
+            Serial.print("Updated ");
+            Serial.print(senderName.c_str());
+            Serial.print(" score to: ");
+            Serial.println(scoreStr);
+        }
+        
+        // Send to PWA
+        int rssi = -99;
+        if (senderDevices.find(senderName) != senderDevices.end()) {
+            rssi = senderDevices[senderName]->rssi;
+        }
+        
+        sendSensorDataToPWA(senderName, scoreStr, rssi);
+        
+        // Update score
+        int sender = 0;
+        if (senderName == "ESP32-BLE-Sender-1") {
+            sender = 1;
+        } else if (senderName == "ESP32-BLE-Sender-2") {
+            sender = 2;
+        }
+        
+        scoreChange(scoreStr.toInt(), sender, attempts);
+    }
 }
 
 // Force reconnect to a sender
@@ -832,11 +1115,43 @@ void connectToSender(BLEAdvertisedDevice* device)
         }
     }
 
-    std::string value = pRemoteTX->readValue().c_str();
-    if (!value.empty()) {
-        sender->lastData = String(value.c_str());
-        Serial.print("Initial value: ");
-        Serial.println(value.c_str());
+    // Initialize message buffer for this sender
+    senderMessageBuffers[deviceName] = "";
+    
+    // Give BLE stack time to fully register notifications
+    delay(200);
+    
+    // Request initial data from sender (send in chunks)
+    Serial.println("Requesting initial data from sender...");
+    String command = "{\"command\":\"get_data\"}";
+    const int chunkSize = 20;
+    bool success = true;
+    
+    for (int i = 0; i < command.length(); i += chunkSize) {
+        int len = min(chunkSize, (int)(command.length() - i));
+        
+        if (i > 0) {
+            delay(50);
+        }
+        
+        bool ok = pRemoteRX->writeValue(
+            (uint8_t*)(command.c_str() + i),
+            len,
+            false
+        );
+        
+        if (!ok) {
+            success = false;
+            break;
+        }
+        
+        delay(10);
+    }
+    
+    if (success) {
+        Serial.println("Data request sent");
+    } else {
+        Serial.println("Failed to send data request");
     }
 
     Serial.print("Successfully connected to sender: ");
@@ -1140,9 +1455,20 @@ void handleBluetooth()
 
     // Send timer updates to PWA periodically (every 1 second when connected)
     static unsigned long lastTimerUpdateTime = 0;
+    static bool timerZeroHandled = false;
     if (pwaConnected && millis() - lastTimerUpdateTime >= 1000) {
         sendScoreToPWA();  // This sends score AND timer
         lastTimerUpdateTime = millis();
+        
+        // Check if timer reached zero
+        uint32_t remainingMs = getRemainingTimerMs();
+        if (remainingMs == 0 && !timerZeroHandled) {
+            Serial.println("⏰ TIME REACHED ZERO - Requesting final data from senders");
+            requestDataFromSenders();
+            timerZeroHandled = true;
+        } else if (remainingMs > 0) {
+            timerZeroHandled = false;
+        }
     }
 
     // Handle score sync to senders
@@ -1153,8 +1479,10 @@ void handleBluetooth()
         Serial.print("Sending queued score sync to ");
         Serial.print(gSync.senderName.c_str());
         Serial.print(" score=");
-        Serial.println(gSync.score);
+        Serial.print(gSync.score);
+        Serial.print(" attempts=");
+        Serial.println(gSync.attempts);
 
-        syncScoreToSender(gSync.senderName, gSync.score);
+        syncScoreToSender(gSync.senderName, gSync.score, gSync.attempts);
     }
 }

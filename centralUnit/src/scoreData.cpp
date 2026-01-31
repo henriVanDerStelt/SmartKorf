@@ -20,14 +20,17 @@ int homeScore = 0;
 int awayScore = 0;
 int oldHome = 0;
 int oldAway = 0;
+int homeAttempts = 0;
+int awayAttempts = 0;
 
-
-void scoreChange(int score, int who) {
+void scoreChange(int score, int who, int attempts) {
  
   if (who == 1) { // home team
     homeScore = score;
+    homeAttempts = attempts;
   } else if (who == 2) { // away team
     awayScore = score;
+    awayAttempts = attempts;
   } else {
     // unknown team, ignore
     return;

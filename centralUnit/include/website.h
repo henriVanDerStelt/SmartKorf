@@ -25,13 +25,15 @@
 // Global variables
 extern int homeScore;
 extern int awayScore;
+extern int homeAttempts;
+extern int awayAttempts;
 
 // Function declarations
 uint32_t getRemainingTimerSeconds();
 uint32_t getRemainingTimerMs();  // Returns remaining time in milliseconds
 String getFormattedTime();  // Returns time in mm:ss:msms format
 void websiteSetup();
-void scoreChange(int score, int who);
+void scoreChange(int score, int who, int attempts);
 void sendScoreNew();  // This will now be implemented in website.cpp
 void sendScoreToPWA(); // Helper function to send to PWA
 
