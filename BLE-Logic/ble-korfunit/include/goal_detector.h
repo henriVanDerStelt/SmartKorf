@@ -20,5 +20,6 @@ void resetGoalDetection();
 bool areSensorsEnabled();
 void incrementAttempts();
 int getAttempts();
+void setAttempts(int newAttempts);
 
 #endif // GOAL_DETECTOR_H

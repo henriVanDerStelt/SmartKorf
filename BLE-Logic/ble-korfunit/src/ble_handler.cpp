@@ -93,11 +93,29 @@ void GatewayCommandCallbacks::onWrite(BLECharacteristic* pCharacteristic)
 void processCommand(DynamicJsonDocument& doc) {
     if (doc["command"].is<const char*>()) {
         String command = doc["command"].as<String>();
+        
         if (command == "set_score" && doc["score"].is<int>()) {
             score = doc["score"];
             Serial.print("🎯 Score set by gateway: ");
             Serial.println(score);
+            
+            // Also update pogingen if provided
+            if (doc["pogingen"].is<int>()) {
+                int attempts = doc["pogingen"];
+                setAttempts(attempts);
+            }
+            
             sendScoreToBLE("sync");
+        }
+        else if (command == "get_data") {
+            Serial.println("📤 Gateway requested current data");
+            sendScoreToBLE("data");
+        }
+        else if (command == "reset_score") {
+            score = 0;
+            setAttempts(0);
+            Serial.println("🔄 Score reset by gateway");
+            sendScoreToBLE("reset");
         }
     } else {
         Serial.println("No valid command found in JSON");
@@ -229,11 +247,48 @@ void sendScoreToBLE(const char* type)
 {
     if (deviceConnected && pTxCharacteristic != nullptr) {
         String message = "{\"score\":" + String(score) + ",\"pogingen\":" + String(getAttempts()) + ",\"type\":\"" + String(type) + "\"}";
-        pTxCharacteristic->setValue(message.c_str());
-        pTxCharacteristic->notify();
         
-        Serial.print("Sent to gateway: ");
+        Serial.print("Sending to gateway (");
+        Serial.print(message.length());
+        Serial.print(" bytes): ");
         Serial.println(message);
+        
+        // Send in chunks if message is too long
+        const int CHUNK_SIZE = 20;
+        
+        if (message.length() <= CHUNK_SIZE) {
+            // Send complete message if short enough
+            pTxCharacteristic->setValue(message.c_str());
+            pTxCharacteristic->notify();
+            Serial.println("✅ Sent complete message");
+        } else {
+            // Send in chunks
+            Serial.println("Sending in chunks...");
+            int totalChunks = (message.length() + CHUNK_SIZE - 1) / CHUNK_SIZE;
+            
+            for (int i = 0; i < message.length(); i += CHUNK_SIZE) {
+                int chunkLength = min(CHUNK_SIZE, (int)(message.length() - i));
+                String chunk = message.substring(i, i + chunkLength);
+                int chunkNum = i/CHUNK_SIZE + 1;
+                
+                // Send chunk via notify
+                pTxCharacteristic->setValue(chunk.c_str());
+                pTxCharacteristic->notify();
+                
+                Serial.print("✅ Sent chunk ");
+                Serial.print(chunkNum);
+                Serial.print("/");
+                Serial.print(totalChunks);
+                Serial.print(": ");
+                Serial.println(chunk);
+                
+                // Small delay between chunks
+                delay(10);
+            }
+            
+            Serial.println("✅ All chunks sent");
+        }
+        
         connectionValid = true;
     } else {
         Serial.print("Not connected to gateway. Current score: ");
@@ -250,7 +305,7 @@ void sendPing()
 
         connectionValid = true;
         connectionTimeout = 0;
-        Serial.println("Ping sent (connection good)");
+        //Serial.println("Ping sent (connection good)");
     }
 }
 

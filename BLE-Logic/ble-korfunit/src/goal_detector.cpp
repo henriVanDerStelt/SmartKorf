@@ -40,6 +40,12 @@ void incrementAttempts() {
 int getAttempts() {
     return pogingen;
 }
+
+void setAttempts(int newAttempts) {
+    pogingen = newAttempts;
+    Serial.print("📊 Attempts set by gateway: ");
+    Serial.println(pogingen);
+}
 void setupSensors() {
     #ifdef USE_SENSORS
     Serial.println("Initializing VL53L1X sensors with Pololu library...");
