@@ -195,6 +195,7 @@ bool timerIsPaused() {
 
 // Reset back to full duration
 void timerReset() {
+  timerStop();
   g_timerStartMs = millis();
   g_timerPausedAtMs = g_timerStartMs;
   g_timerPaused = true;  // Reset to paused state

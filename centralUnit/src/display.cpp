@@ -24,52 +24,34 @@ void displayInit() {
   mxconfig.gpio.b  = B_PIN;
   mxconfig.gpio.c  = C_PIN;
   mxconfig.gpio.d  = D_PIN;
-  mxconfig.gpio.e  = E_PIN; // 1/32 scan panels only
+  mxconfig.gpio.e  = E_PIN;
 
   mxconfig.gpio.clk = CLK_PIN;
   mxconfig.gpio.lat = LAT_PIN;
   mxconfig.gpio.oe  = OE_PIN;
 
-  // change depending on usecase
+  // Use scoreboard settings by default
   scoreBoardSettings();
-  // funSettings();
 
   dma_display = new MatrixPanel_I2S_DMA(mxconfig);
 
   if (!dma_display->begin()) {
-    Serial.println("****** I2S/DMA init FAILED (memory or pin issue) ********");
+    Serial.println("I2S/DMA init failed");
     while (true) {
       delay(1000);
     }
   }
-  Serial.println("Successfully started matrix display.");
+  Serial.println("Matrix display started");
 
   dma_display->setBrightness8(128);
   dma_display->clearScreen();
 }
 
 void scoreBoardSettings(){
-    /* 
-  ALS JE DEZE SETTINGS HIERONDER AANPAST KRIJG JE SCREENTEARING/RUIS!
-  DUS: ADMIN SETTINGS, NIET AANPASSEN TENZIJ JE WEET WAT JE DOET!
-  */
-  mxconfig.setPixelColorDepthBits(3); // 6 bits per color channel so 18 bits, lower if memory issues occur
-  mxconfig.latch_blanking = 1; // the time between clocking data to the panel and then turning the LEDS 'on', 1 is default
-  mxconfig.i2sspeed       = HUB75_I2S_CFG::HZ_15M; // (HZ_15M works best atm)
-  mxconfig.clkphase       = true;      // or false depending on panel; default is true in newer versions
-  mxconfig.double_buff = false;   // can be used for syncing to avoid visual artefacts, but uses more RAM. use with flipdmabuffer(). Also breaks site, no ram?
-  mxconfig.min_refresh_rate = 120; // set to 120Hz minimum refresh rate (120 works best atm)
-
-}
-
-void funSettings(){
-  /*
-  MET DEZE SETTINGS KAN DE ESP32 ALLEEN HET DISPLAY AAN, GEEN MEMORY OVER VOOR ANDERE DINGEN!
-  */
-  mxconfig.setPixelColorDepthBits(8); 
-  mxconfig.latch_blanking = 1; 
-  mxconfig.i2sspeed       = HUB75_I2S_CFG::HZ_15M; 
-  mxconfig.clkphase       = true;     
-  mxconfig.double_buff = true;   
-  mxconfig.min_refresh_rate = 60; 
+  mxconfig.setPixelColorDepthBits(3);
+  mxconfig.latch_blanking = 1;
+  mxconfig.i2sspeed = HUB75_I2S_CFG::HZ_15M;
+  mxconfig.clkphase = true;
+  mxconfig.double_buff = false;
+  mxconfig.min_refresh_rate = 120;
 }

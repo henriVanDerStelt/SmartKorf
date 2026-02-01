@@ -49,4 +49,8 @@ bool timerIsPaused();
 void timerTogglePause();
 void setupScoreBoardBLE();
 
+// Halftime management functions
+void triggerHalftime(bool isHalftime);
+void processHalftimeStateMachine();
+
 #endif // WEBSITE_H
