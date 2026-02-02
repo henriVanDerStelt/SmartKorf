@@ -4,7 +4,7 @@ import { supabase } from "../../supabaseClient";
 import { useUser } from "@clerk/clerk-react";
 import { useTime, useHalfTime } from "../../Hooks/Commands";
 
-export const TIMER_DURATION = 0.1; // time in minutes
+export const TIMER_DURATION = 30; // time in minutes
 
 interface TimerProps {
   timeLeft: number;
