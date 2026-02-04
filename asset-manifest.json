@@ -1,17 +1,18 @@
 {
   "files": {
-    "main.css": "/SmartKorf/static/css/main.81c53b7f.css",
-    "main.js": "/SmartKorf/static/js/main.9c2e55e7.js",
+    "main.css": "/SmartKorf/static/css/main.584e3397.css",
+    "main.js": "/SmartKorf/static/js/main.4ac861af.js",
     "static/js/453.83ee6779.chunk.js": "/SmartKorf/static/js/453.83ee6779.chunk.js",
     "static/media/image.png": "/SmartKorf/static/media/image.cca9685c0f51909295ff.png",
+    "static/media/Logo.png": "/SmartKorf/static/media/Logo.4ff65e6dd412a82690d7.png",
     "static/media/angry_face.png": "/SmartKorf/static/media/angry_face.fe37aa13abea47ed2c72.png",
     "index.html": "/SmartKorf/index.html",
-    "main.81c53b7f.css.map": "/SmartKorf/static/css/main.81c53b7f.css.map",
-    "main.9c2e55e7.js.map": "/SmartKorf/static/js/main.9c2e55e7.js.map",
+    "main.584e3397.css.map": "/SmartKorf/static/css/main.584e3397.css.map",
+    "main.4ac861af.js.map": "/SmartKorf/static/js/main.4ac861af.js.map",
     "453.83ee6779.chunk.js.map": "/SmartKorf/static/js/453.83ee6779.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.81c53b7f.css",
-    "static/js/main.9c2e55e7.js"
+    "static/css/main.584e3397.css",
+    "static/js/main.4ac861af.js"
   ]
 }
